@@ -106,11 +106,14 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 ## Output Policy
 
 - Scratch/regression outputs remain local-only:
-  - `qa_out*/`, `qa_scan*/`, and `out/` are git-ignored.
+  - `qa_out*/`, `qa_scan*/`, `out/`, and `diagnostics_local/` are git-ignored.
 - Provenance outputs should be written under `artifacts/` and committed when needed.
 - For reproducible provenance, always set an explicit run directory:
   - single-`n`: `artifacts/runs/<YYYY-MM-DD>/<run_tag>/`
   - `--n-list`: `artifacts/scans/<YYYY-MM-DD>/<run_tag>/`
+- Temporary diagnostic/audit runs (for failed, pre-patch, or exploratory runs) should go under:
+  - `diagnostics_local/<YYYY-MM-DD>/<run_tag>/`
+  - keep these untracked by default.
 - Recommended provenance files to commit:
   - `summary.json`
   - `scan_summary.csv` (for scans)

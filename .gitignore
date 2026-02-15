@@ -18,6 +18,7 @@ dist/
 qa_out*/
 qa_scan*/
 out/
+diagnostics_local/
 **/.mplconfig/
 
 # Provenance policy:
