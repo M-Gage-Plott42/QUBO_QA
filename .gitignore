@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Outputs
+qa_out*/
+qa_scan*/
+out/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

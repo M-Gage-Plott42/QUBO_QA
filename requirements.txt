@@ -1,0 +1,8 @@
+qiskit>=1.1
+qiskit-aer>=0.14
+numpy>=1.26
+networkx>=3.2
+dimod>=0.12
+scipy>=1.11
+matplotlib>=3.8
+
