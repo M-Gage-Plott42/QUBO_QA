@@ -29,6 +29,9 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - Easy-case-rate metrics in `summary.json` and `scan_summary.csv`:
   - per-family easy-case rate at `k <= 0`
   - overall mean easy-case rate per run
+- Success-probability reporting split into:
+  - cumulative-by-time success (`success_prob.png`)
+  - instantaneous-at-time success (`success_prob_instantaneous.png`)
 - Optional `--n-list` scan-stop criterion based on:
   - max Holm-adjusted p-value threshold
   - overall mean easy-case-rate threshold
@@ -50,6 +53,7 @@ Single-`n` mode outputs:
 - `summary.json`
 - `convergence_energy.png`
 - `success_prob.png`
+- `success_prob_instantaneous.png`
 - `steps_boxplot.png`
 - `expectation_energy.png` (only when `--estimator-diagnostics` is enabled)
 
@@ -127,21 +131,17 @@ Commit only after these checks pass and audit results are reviewed.
 - Scan-stop criterion exists, but default thresholds are user-provided (no auto-selected default policy yet).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
 - Method-audit findings (2026-02-15) identified correctness/robustness follow-ups:
-  - MIS penalty parameter should be constrained to regimes that preserve independent-set semantics.
-  - `success_prob.png` is currently cumulative ("reached by time t"), not instantaneous-at-time.
   - Some CLI parameter range checks are still missing (`--graph-p`, `--random-density`, and basic bounds coupling checks).
 
 ## Immediate Next Tasks
 
-1. High priority (correctness guard): add CLI validation for MIS penalty regime (`--mis-lambda > 1` for current unweighted MIS formulation) and document rationale.
-2. Medium priority (interpretation clarity): rename or document `success_prob.png` semantics as cumulative success-by-time, and optionally add an instantaneous final-time success curve.
-3. Medium priority (robustness): add explicit CLI range validation for `--graph-p in [0,1]`, `--random-density in [0,1]`, and other basic bounds consistency checks.
-4. Medium priority (verification): add regression tests for
+1. Medium priority (robustness): add explicit CLI range validation for `--graph-p in [0,1]`, `--random-density in [0,1]`, and other basic bounds consistency checks.
+2. Medium priority (verification): add regression tests for
    - Ising energy evaluation consistency against `dimod` BQM energy on sampled bitstrings,
    - MIS invalid-lambda rejection behavior,
    - expected semantics of cumulative success curve.
-5. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
-6. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+3. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
+4. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Method Audit Action List (2026-02-15)
 
@@ -149,11 +149,13 @@ Priority `P0`:
 - Enforce `--mis-lambda > 1` for current MIS objective form `-sum x_i + lambda * sum x_i x_j`.
   - Rationale: this preserves independent-set encoding in the standard QUBO construction.
   - Acceptance: CLI rejects invalid values with a clear error and README documents the bound.
+  - Status: complete (implemented in commit `37eadaf`).
 
 Priority `P1`:
 - Clarify success metric labeling.
   - Current behavior computes success on `best_so_far` trajectories, so the plot is cumulative by time.
-  - Acceptance: title/legend/docs explicitly say "reached by time t" or a separate instantaneous variant is added.
+  - Acceptance: title/legend/docs explicitly say "reached by time t" and a separate instantaneous variant is added.
+  - Status: complete (implemented on `main`, see commit history after `37eadaf`).
 
 Priority `P1`:
 - Add missing parameter guardrails.

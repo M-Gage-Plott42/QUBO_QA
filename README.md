@@ -108,7 +108,8 @@ Default output directory: `qa_out/`
 - `results.csv` (per-instance metrics)
 - `summary.json` (aggregate metrics + test results, including `easy_case` rates)
 - `convergence_energy.png` (median best-so-far energy vs time)
-- `success_prob.png` (success probability vs time)
+- `success_prob.png` (cumulative success probability vs time, "reached by time `t`")
+- `success_prob_instantaneous.png` (instantaneous success probability at time `t`)
 - `expectation_energy.png` (optional, only with `--estimator-diagnostics`)
 - `steps_boxplot.png` (steps-to-opt distribution)
 
@@ -147,7 +148,9 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Transpile cache can be controlled with `--transpile-cache-mode {support,full}` and `--no-transpile-cache`.
 - Low-yield cache runs can auto-disable caching via hit-rate fallback (`--cache-autodisable-*`, `--no-cache-autodisable`).
 - `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
-- `success_prob.png` currently reports cumulative success-by-time ("reached optimum by time `t`"), because it is computed from best-so-far trajectories.
+- Success curves are reported in two variants:
+  - cumulative-by-time (`success_prob.png`, computed from best-so-far trajectories),
+  - instantaneous-at-time (`success_prob_instantaneous.png`, computed from per-step sampled energies).
 - Optional `--n-list` early-stop is available when both are provided:
   - `--scan-stop-p-holm-threshold` and `--scan-stop-easy-case-threshold`
   - optional tuning via `--scan-stop-easy-case-op {le,ge}` and `--scan-stop-min-n-evals`

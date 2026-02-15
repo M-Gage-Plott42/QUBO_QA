@@ -798,6 +798,7 @@ def run_benchmark_for_n(
 
     families = ["random", "maxcut", "mis"]
     curves_best_so_far: Dict[str, List[np.ndarray]] = {f: [] for f in families}
+    curves_raw_energy: Dict[str, List[np.ndarray]] = {f: [] for f in families}
     curves_expectation: Optional[Dict[str, List[np.ndarray]]] = (
         {f: [] for f in families} if bool(args.estimator_diagnostics) else None
     )
@@ -852,6 +853,7 @@ def run_benchmark_for_n(
             )
 
             best_so_far = np.minimum.accumulate(energies)
+            curves_raw_energy[fam].append(energies)
             curves_best_so_far[fam].append(best_so_far)
             if curves_expectation is not None:
                 if exp_curve is None:
@@ -922,9 +924,12 @@ def run_benchmark_for_n(
     curve_maxcut = agg_curve(curves_best_so_far["maxcut"], agg=agg)
     curve_mis = agg_curve(curves_best_so_far["mis"], agg=agg)
 
-    success_random = success_curve(curves_best_so_far["random"], opt_energies_by_family["random"])
-    success_maxcut = success_curve(curves_best_so_far["maxcut"], opt_energies_by_family["maxcut"])
-    success_mis = success_curve(curves_best_so_far["mis"], opt_energies_by_family["mis"])
+    success_cumulative_random = success_curve(curves_best_so_far["random"], opt_energies_by_family["random"])
+    success_cumulative_maxcut = success_curve(curves_best_so_far["maxcut"], opt_energies_by_family["maxcut"])
+    success_cumulative_mis = success_curve(curves_best_so_far["mis"], opt_energies_by_family["mis"])
+    success_instant_random = success_curve(curves_raw_energy["random"], opt_energies_by_family["random"])
+    success_instant_maxcut = success_curve(curves_raw_energy["maxcut"], opt_energies_by_family["maxcut"])
+    success_instant_mis = success_curve(curves_raw_energy["mis"], opt_energies_by_family["mis"])
     exp_random: Optional[np.ndarray] = None
     exp_maxcut: Optional[np.ndarray] = None
     exp_mis: Optional[np.ndarray] = None
@@ -984,10 +989,17 @@ def run_benchmark_for_n(
         "rate": easy_case_rates,
         "overall_mean_rate": float(np.mean(list(easy_case_rates.values()))),
     }
-    stats["success_probability_at_tmax"] = {
-        "random": float(success_random[-1]),
-        "maxcut": float(success_maxcut[-1]),
-        "mis": float(success_mis[-1]),
+    stats["success_probability_cumulative_at_tmax"] = {
+        "random": float(success_cumulative_random[-1]),
+        "maxcut": float(success_cumulative_maxcut[-1]),
+        "mis": float(success_cumulative_mis[-1]),
+    }
+    # Backward-compatible alias retained for existing consumers.
+    stats["success_probability_at_tmax"] = dict(stats["success_probability_cumulative_at_tmax"])
+    stats["success_probability_instantaneous_at_tmax"] = {
+        "random": float(success_instant_random[-1]),
+        "maxcut": float(success_instant_maxcut[-1]),
+        "mis": float(success_instant_mis[-1]),
     }
     if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
         stats["estimator_expectation_at_tmax"] = {
@@ -1101,19 +1113,34 @@ def run_benchmark_for_n(
     print(f"Wrote: {out_plot}")
 
     plt.figure()
-    plt.plot(t_axis, success_random, label="Random QUBO")
-    plt.plot(t_axis, success_maxcut, label="MaxCut QUBO")
-    plt.plot(t_axis, success_mis, label="MIS QUBO")
+    plt.plot(t_axis, success_cumulative_random, label="Random QUBO")
+    plt.plot(t_axis, success_cumulative_maxcut, label="MaxCut QUBO")
+    plt.plot(t_axis, success_cumulative_mis, label="MIS QUBO")
     plt.xlabel("t (dimensionless), with delta_t = %.2f" % float(args.delta_t))
-    plt.ylabel("success probability")
+    plt.ylabel("cumulative success probability (reached by time t)")
     plt.ylim(0.0, 1.01)
-    plt.title(f"Success probability vs time (n={n}, N={args.instances})")
+    plt.title(f"Cumulative success probability vs time (n={n}, N={args.instances})")
     plt.legend()
     plt.tight_layout()
     out_plot_success = os.path.join(outdir, "success_prob.png")
     plt.savefig(out_plot_success, dpi=200)
     plt.close()
     print(f"Wrote: {out_plot_success}")
+
+    plt.figure()
+    plt.plot(t_axis, success_instant_random, label="Random QUBO")
+    plt.plot(t_axis, success_instant_maxcut, label="MaxCut QUBO")
+    plt.plot(t_axis, success_instant_mis, label="MIS QUBO")
+    plt.xlabel("t (dimensionless), with delta_t = %.2f" % float(args.delta_t))
+    plt.ylabel("instantaneous success probability (at time t)")
+    plt.ylim(0.0, 1.01)
+    plt.title(f"Instantaneous success probability vs time (n={n}, N={args.instances})")
+    plt.legend()
+    plt.tight_layout()
+    out_plot_success_inst = os.path.join(outdir, "success_prob_instantaneous.png")
+    plt.savefig(out_plot_success_inst, dpi=200)
+    plt.close()
+    print(f"Wrote: {out_plot_success_inst}")
 
     if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
         plt.figure()
