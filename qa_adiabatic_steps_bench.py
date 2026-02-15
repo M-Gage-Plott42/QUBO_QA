@@ -936,6 +936,7 @@ def run_benchmark_for_n(
     steps_r = np.asarray(steps_to_opt["random"], dtype=float)
     steps_c = np.asarray(steps_to_opt["maxcut"], dtype=float)
     steps_m = np.asarray(steps_to_opt["mis"], dtype=float)
+    easy_case_k_threshold = 0
 
     stats: Dict[str, Any] = {
         "n": n,
@@ -971,6 +972,17 @@ def run_benchmark_for_n(
         "random": {"median": float(np.median(steps_r)), "mean": float(np.mean(steps_r))},
         "maxcut": {"median": float(np.median(steps_c)), "mean": float(np.mean(steps_c))},
         "mis": {"median": float(np.median(steps_m)), "mean": float(np.mean(steps_m))},
+    }
+    easy_case_rates = {
+        "random": float(np.mean(steps_r <= easy_case_k_threshold)),
+        "maxcut": float(np.mean(steps_c <= easy_case_k_threshold)),
+        "mis": float(np.mean(steps_m <= easy_case_k_threshold)),
+    }
+    stats["easy_case"] = {
+        "k_threshold": int(easy_case_k_threshold),
+        "t_threshold": float(easy_case_k_threshold * float(args.delta_t)),
+        "rate": easy_case_rates,
+        "overall_mean_rate": float(np.mean(list(easy_case_rates.values()))),
     }
     stats["success_probability_at_tmax"] = {
         "random": float(success_random[-1]),
@@ -1057,6 +1069,7 @@ def run_benchmark_for_n(
 
     print("\n=== Summary ===")
     print(json.dumps(stats["steps_summary"], indent=2))
+    print("Easy-case rates (k <= 0):", stats["easy_case"]["rate"])
     if stats.get("pvals_one_sided_less") is not None:
         print(f"p-values ({stats['pvals_method']}):", stats["pvals_one_sided_less"])
         print("Holm-adjusted p-values:", stats["pvals_holm_adjusted"])
@@ -1262,6 +1275,8 @@ def main() -> None:
         pvals_holm = stats.get("pvals_holm_adjusted") or {}
         deltas = stats.get("cliffs_delta_smaller_is_better") or {}
         steps_summary = stats["steps_summary"]
+        easy_case = stats.get("easy_case") or {}
+        easy_case_rates = easy_case.get("rate") or {}
 
         scan_rows.append(
             {
@@ -1270,6 +1285,11 @@ def main() -> None:
                 "random_median_steps": float(steps_summary["random"]["median"]),
                 "maxcut_median_steps": float(steps_summary["maxcut"]["median"]),
                 "mis_median_steps": float(steps_summary["mis"]["median"]),
+                "easy_case_k_threshold": easy_case.get("k_threshold", ""),
+                "random_easy_case_rate": easy_case_rates.get("random", ""),
+                "maxcut_easy_case_rate": easy_case_rates.get("maxcut", ""),
+                "mis_easy_case_rate": easy_case_rates.get("mis", ""),
+                "overall_mean_easy_case_rate": easy_case.get("overall_mean_rate", ""),
                 "p_random_vs_maxcut": pvals.get("random_vs_maxcut", ""),
                 "p_random_vs_mis": pvals.get("random_vs_mis", ""),
                 "p_holm_random_vs_maxcut": pvals_holm.get("random_vs_maxcut", ""),
@@ -1290,6 +1310,11 @@ def main() -> None:
                 "random_median_steps",
                 "maxcut_median_steps",
                 "mis_median_steps",
+                "easy_case_k_threshold",
+                "random_easy_case_rate",
+                "maxcut_easy_case_rate",
+                "mis_easy_case_rate",
+                "overall_mean_easy_case_rate",
                 "p_random_vs_maxcut",
                 "p_random_vs_mis",
                 "p_holm_random_vs_maxcut",

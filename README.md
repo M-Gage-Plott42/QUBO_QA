@@ -106,7 +106,7 @@ Enable estimator diagnostics (writes `expectation_energy.png`):
 Default output directory: `qa_out/`
 
 - `results.csv` (per-instance metrics)
-- `summary.json` (aggregate metrics + test results)
+- `summary.json` (aggregate metrics + test results, including `easy_case` rates)
 - `convergence_energy.png` (median best-so-far energy vs time)
 - `success_prob.png` (success probability vs time)
 - `expectation_energy.png` (optional, only with `--estimator-diagnostics`)
@@ -116,7 +116,7 @@ Default output directory: `qa_out/`
 
 If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - `qa_scan/n_4/`, `qa_scan/n_5/`, `qa_scan/n_6/` (each with per-`n` results and summary)
-- `qa_scan/scan_summary.csv` (one row per `n`, medians, p-values, Holm-adjusted p-values, Cliff's deltas)
+- `qa_scan/scan_summary.csv` (one row per `n`, medians, easy-case rates, p-values, Holm-adjusted p-values, Cliff's deltas)
 
 ## Output Policy
 

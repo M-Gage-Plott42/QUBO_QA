@@ -26,6 +26,9 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - `--stats-method perm` (one-sided permutation test on median difference)
   - Holm correction + Cliff's delta reporting
 - `--n-list` multi-size scan mode and `scan_summary.csv`
+- Easy-case-rate metrics in `summary.json` and `scan_summary.csv`:
+  - per-family easy-case rate at `k <= 0`
+  - overall mean easy-case rate per run
 - Graph relabeling for MaxCut/MIS (BFS high-degree ordering) to improve linear locality for MPS
 - Modern Aer primitives sampling via `SamplerV2.from_backend(...)`
 - Transpile/template reuse across instances with cache modes:
@@ -117,14 +120,13 @@ Commit only after these checks pass and audit results are reviewed.
 ## Open Risks / Gaps
 
 - Cache performance remains workload-dependent; current `s02` matrix shows mixed `on` vs `off` timing with no clear speedup.
-- No auto-stop/easy-case threshold logic in `--n-list` scans yet.
+- No auto-stop logic in `--n-list` scans yet (for example, based on adjusted p-value plus easy-case-rate threshold).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
 
 ## Immediate Next Tasks
 
-1. Add an optional "easy-case rate" metric and include it in `summary.json` and `scan_summary.csv`.
-2. Add an optional scan stopping criterion based on adjusted p-value and easy-case-rate threshold.
-3. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+1. Add an optional scan stopping criterion based on adjusted p-value and easy-case-rate threshold.
+2. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Quick Commands
 
