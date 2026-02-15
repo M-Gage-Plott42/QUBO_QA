@@ -3,7 +3,7 @@
 QA/adiabatic (digital) annealing benchmark for three QUBO families:
   - Random symmetric Q in [-5, 5] (optionally sparse), objective x^T Q x
   - MaxCut QUBO on an Erdos-Renyi graph
-  - MIS QUBO on an Erdos-Renyi graph, objective -sum x_i + lambda * sum_{(i,j)} x_i x_j
+  - MIS QUBO on an Erdos-Renyi graph, objective -sum w_i x_i + lambda * sum_{(i,j)} x_i x_j
 
 We simulate adiabatic evolution under:
   H(s) = (1-s) * H_driver + s * H_problem
@@ -193,14 +193,17 @@ def make_mis_qubo_bqm(
     n: int,
     p: float,
     penalty_lambda: float,
+    node_weight_low: int = 1,
+    node_weight_high: int = 1,
 ) -> Tuple[dimod.BinaryQuadraticModel, Dict[str, Any]]:
     """
     MIS QUBO (minimization):
-        minimize -sum_i x_i + lambda * sum_{(i,j) in E} x_i x_j
+        minimize -sum_i w_i x_i + lambda * sum_{(i,j) in E} x_i x_j
     """
     g_raw = nx.erdos_renyi_graph(n, p, seed=int(rng.integers(0, 2**31 - 1)))
     g, mapping_old_to_new, metrics = relabel_graph_bfs_high_degree(g_raw)
-    lin = {i: -1.0 for i in range(n)}
+    node_weights = {i: float(rng.integers(node_weight_low, node_weight_high + 1)) for i in range(n)}
+    lin = {i: -node_weights[i] for i in range(n)}
     quad: Dict[Tuple[int, int], float] = {}
     for (i, j) in g.edges():
         ii, jj = (i, j) if i < j else (j, i)
@@ -210,6 +213,8 @@ def make_mis_qubo_bqm(
         "p": p,
         "m": g.number_of_edges(),
         "lambda": float(penalty_lambda),
+        "node_weight_low": int(node_weight_low),
+        "node_weight_high": int(node_weight_high),
         "node_order_old_to_new": mapping_old_to_new,
         **metrics,
     }
@@ -873,13 +878,21 @@ def run_benchmark_for_n(
                     density=float(args.random_density),
                 )
             elif fam == "maxcut":
-                bqm, _meta = make_maxcut_qubo_bqm(rng, n, p=float(args.graph_p))
+                bqm, _meta = make_maxcut_qubo_bqm(
+                    rng,
+                    n,
+                    p=float(args.graph_p),
+                    weight_low=int(args.maxcut_weight_low),
+                    weight_high=int(args.maxcut_weight_high),
+                )
             elif fam == "mis":
                 bqm, _meta = make_mis_qubo_bqm(
                     rng,
                     n,
                     p=float(args.graph_p),
                     penalty_lambda=float(args.mis_lambda),
+                    node_weight_low=int(args.mis_node_weight_low),
+                    node_weight_high=int(args.mis_node_weight_high),
                 )
             else:
                 raise RuntimeError("Unknown family")
@@ -1017,6 +1030,10 @@ def run_benchmark_for_n(
         "opt_ref": str(args.opt_ref),
         "aer_method": str(backend.options.method),
         "scale_dynamics": str(args.scale_dynamics),
+        "maxcut_weight_low": int(args.maxcut_weight_low),
+        "maxcut_weight_high": int(args.maxcut_weight_high),
+        "mis_node_weight_low": int(args.mis_node_weight_low),
+        "mis_node_weight_high": int(args.mis_node_weight_high),
         "stats_method": str(args.stats_method),
         "transpile_cache": {
             "enabled": bool(cache_requested),
@@ -1285,7 +1302,11 @@ def main() -> None:
     ap.add_argument("--random-high", type=int, default=5)
     ap.add_argument("--random-density", type=float, default=1.0, help="Off-diagonal density for random Q.")
     ap.add_argument("--graph-p", type=float, default=0.3, help="Edge probability for MaxCut and MIS graphs.")
+    ap.add_argument("--maxcut-weight-low", type=int, default=1, help="Minimum integer edge weight for MaxCut.")
+    ap.add_argument("--maxcut-weight-high", type=int, default=1, help="Maximum integer edge weight for MaxCut.")
     ap.add_argument("--mis-lambda", type=float, default=2.0, help="Penalty lambda for MIS QUBO.")
+    ap.add_argument("--mis-node-weight-low", type=int, default=1, help="Minimum integer node weight for MIS.")
+    ap.add_argument("--mis-node-weight-high", type=int, default=1, help="Maximum integer node weight for MIS.")
 
     ap.add_argument("--trotter-order", type=int, default=2, choices=[1, 2])
     ap.add_argument("--scale-dynamics", type=str, default="maxabs", choices=["none", "maxabs"])
@@ -1414,6 +1435,14 @@ def main() -> None:
         raise SystemExit("--t-max must be nonnegative.")
     if int(args.random_low) > int(args.random_high):
         raise SystemExit("--random-low must be <= --random-high.")
+    if int(args.maxcut_weight_low) > int(args.maxcut_weight_high):
+        raise SystemExit("--maxcut-weight-low must be <= --maxcut-weight-high.")
+    if int(args.maxcut_weight_low) <= 0:
+        raise SystemExit("--maxcut-weight-low must be positive.")
+    if int(args.mis_node_weight_low) > int(args.mis_node_weight_high):
+        raise SystemExit("--mis-node-weight-low must be <= --mis-node-weight-high.")
+    if int(args.mis_node_weight_low) <= 0:
+        raise SystemExit("--mis-node-weight-low must be positive.")
     if not (0.0 <= float(args.random_density) <= 1.0):
         raise SystemExit("--random-density must be in [0, 1].")
     if not (0.0 <= float(args.graph_p) <= 1.0):
@@ -1428,10 +1457,11 @@ def main() -> None:
         raise SystemExit("--mps-truncation-threshold must be nonnegative.")
     if int(args.mps_omp_threads) <= 0:
         raise SystemExit("--mps-omp-threads must be positive.")
-    if float(args.mis_lambda) <= 1.0:
+    mis_lambda_required = max(1.0, float(args.mis_node_weight_high))
+    if float(args.mis_lambda) <= mis_lambda_required:
         raise SystemExit(
-            "--mis-lambda must be > 1.0 for the current MIS QUBO formulation "
-            "(-sum x_i + lambda * sum x_i x_j)."
+            "--mis-lambda must be greater than max(1.0, --mis-node-weight-high) for "
+            "MIS QUBO formulation (-sum w_i x_i + lambda * sum x_i x_j)."
         )
     if str(args.hardness_proxy) == "exact" and str(args.opt_ref) != "exact":
         raise SystemExit("--hardness-proxy=exact requires --opt-ref exact.")

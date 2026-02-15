@@ -57,6 +57,15 @@ Small exact sanity check:
 .venv/bin/python qa_adiabatic_steps_bench.py -n 6 --instances 10 --t-max 5 --shots 64 --aer-method statevector --opt-ref exact
 ```
 
+Weighted MaxCut/MIS sample:
+
+```bash
+.venv/bin/python qa_adiabatic_steps_bench.py -n 8 --instances 20 --t-max 8 --shots 128 \
+  --aer-method statevector --opt-ref exact \
+  --maxcut-weight-low 1 --maxcut-weight-high 5 \
+  --mis-node-weight-low 1 --mis-node-weight-high 4 --mis-lambda 5
+```
+
 Permutation-statistics run:
 
 ```bash
@@ -141,10 +150,16 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - This is digital adiabatic simulation (Trotterized circuit evolution), not analog hardware quantum annealing.
 - `--opt-ref exact` uses brute-force exact solving (`dimod.ExactSolver`) and is intended for small `n`.
 - `--opt-ref qa_best` uses the best observed final energy as the reference optimum.
-- MIS penalty note: for the current unweighted MIS QUBO form (`-sum x_i + lambda * sum x_i x_j`), use `--mis-lambda > 1` to preserve standard MIS encoding semantics.
+- Weighted controls:
+  - MaxCut edge weights: `--maxcut-weight-low`, `--maxcut-weight-high`
+  - MIS node weights: `--mis-node-weight-low`, `--mis-node-weight-high`
+- MIS penalty note: for the weighted MIS QUBO form (`-sum w_i x_i + lambda * sum x_i x_j`), use
+  `--mis-lambda > max(1, --mis-node-weight-high)` to preserve encoding semantics.
 - Input guardrails:
   - `--random-density` and `--graph-p` must be in `[0,1]`,
-  - `--random-low <= --random-high`.
+  - `--random-low <= --random-high`,
+  - `--maxcut-weight-low <= --maxcut-weight-high`,
+  - `--mis-node-weight-low <= --mis-node-weight-high`.
 - Ising energy evaluation is aligned with `dimod` conversion conventions (`x = (s + 1)/2`, so measured bit `0 -> s=-1`, `1 -> s=+1`).
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.

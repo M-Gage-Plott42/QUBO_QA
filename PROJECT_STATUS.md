@@ -38,6 +38,9 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - overall mean easy-case-rate threshold
   - configurable easy-case comparison operator (`le`/`ge`) and minimum evaluated `n` count
 - Graph relabeling for MaxCut/MIS (BFS high-degree ordering) to improve linear locality for MPS
+- Weighted graph controls:
+  - MaxCut edge-weight range (`--maxcut-weight-low`, `--maxcut-weight-high`)
+  - MIS node-weight range (`--mis-node-weight-low`, `--mis-node-weight-high`)
 - Modern Aer primitives sampling via `SamplerV2.from_backend(...)`
 - Transpile/template reuse across instances with cache modes:
   - `support` mode (keyed by nonzero support signature)
