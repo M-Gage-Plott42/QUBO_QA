@@ -142,6 +142,9 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - `--opt-ref exact` uses brute-force exact solving (`dimod.ExactSolver`) and is intended for small `n`.
 - `--opt-ref qa_best` uses the best observed final energy as the reference optimum.
 - MIS penalty note: for the current unweighted MIS QUBO form (`-sum x_i + lambda * sum x_i x_j`), use `--mis-lambda > 1` to preserve standard MIS encoding semantics.
+- Input guardrails:
+  - `--random-density` and `--graph-p` must be in `[0,1]`,
+  - `--random-low <= --random-high`.
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.

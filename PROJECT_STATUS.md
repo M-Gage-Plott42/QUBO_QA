@@ -131,17 +131,16 @@ Commit only after these checks pass and audit results are reviewed.
 - Scan-stop criterion exists, but default thresholds are user-provided (no auto-selected default policy yet).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
 - Method-audit findings (2026-02-15) identified correctness/robustness follow-ups:
-  - Some CLI parameter range checks are still missing (`--graph-p`, `--random-density`, and basic bounds coupling checks).
+  - Regression tests for key semantics/guards remain to be added.
 
 ## Immediate Next Tasks
 
-1. Medium priority (robustness): add explicit CLI range validation for `--graph-p in [0,1]`, `--random-density in [0,1]`, and other basic bounds consistency checks.
-2. Medium priority (verification): add regression tests for
+1. Medium priority (verification): add regression tests for
    - Ising energy evaluation consistency against `dimod` BQM energy on sampled bitstrings,
    - MIS invalid-lambda rejection behavior,
    - expected semantics of cumulative success curve.
-3. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
-4. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+2. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
+3. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Method Audit Action List (2026-02-15)
 
@@ -161,6 +160,7 @@ Priority `P1`:
 - Add missing parameter guardrails.
   - Validate `--graph-p`, `--random-density` in `[0,1]`.
   - Acceptance: invalid values fail fast with actionable messages.
+  - Status: complete (implemented on `main`, see commit history after `c6a5dac`).
 
 Priority `P1`:
 - Add focused tests for the above.

@@ -1301,6 +1301,22 @@ def main() -> None:
         raise SystemExit("--delta-t must be positive.")
     if args.t_max < 0.0:
         raise SystemExit("--t-max must be nonnegative.")
+    if int(args.random_low) > int(args.random_high):
+        raise SystemExit("--random-low must be <= --random-high.")
+    if not (0.0 <= float(args.random_density) <= 1.0):
+        raise SystemExit("--random-density must be in [0, 1].")
+    if not (0.0 <= float(args.graph_p) <= 1.0):
+        raise SystemExit("--graph-p must be in [0, 1].")
+    if int(args.exact_max_n) <= 0:
+        raise SystemExit("--exact-max-n must be positive.")
+    if int(args.mps_auto_threshold) <= 0:
+        raise SystemExit("--mps-auto-threshold must be positive.")
+    if int(args.mps_max_bond_dimension) <= 0:
+        raise SystemExit("--mps-max-bond-dimension must be positive.")
+    if float(args.mps_truncation_threshold) < 0.0:
+        raise SystemExit("--mps-truncation-threshold must be nonnegative.")
+    if int(args.mps_omp_threads) <= 0:
+        raise SystemExit("--mps-omp-threads must be positive.")
     if float(args.mis_lambda) <= 1.0:
         raise SystemExit(
             "--mis-lambda must be > 1.0 for the current MIS QUBO formulation "
