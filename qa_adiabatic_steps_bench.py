@@ -32,6 +32,7 @@ Outputs:
 Notes:
   - For large n, use Aer method="matrix_product_state" (MPS). This can scale to more qubits if
     entanglement remains moderate; otherwise it can still blow up.
+  - Transpile cache supports `support` and `full` modes; low hit-rate runs can auto-disable cache.
 """
 
 from __future__ import annotations
@@ -266,7 +267,10 @@ class TranspiledTemplate:
     circuits: List[QuantumCircuit]
 
 
-def support_signature(model_dyn: IsingModel, tol: float = 1e-15) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]:
+_FULL_SUPPORT_CACHE: Dict[int, Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]] = {}
+
+
+def support_signature_sparse(model_dyn: IsingModel, tol: float = 1e-15) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]:
     h_indices = tuple(i for i in range(model_dyn.n) if abs(float(model_dyn.h[i])) > tol)
     j_pairs = sorted(
         (
@@ -276,6 +280,29 @@ def support_signature(model_dyn: IsingModel, tol: float = 1e-15) -> Tuple[Tuple[
         )
     )
     return h_indices, tuple(j_pairs)
+
+
+def support_signature_full(n: int) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]:
+    if n in _FULL_SUPPORT_CACHE:
+        return _FULL_SUPPORT_CACHE[n]
+    h_indices = tuple(range(int(n)))
+    j_pairs = tuple((i, j) for i in range(int(n)) for j in range(i + 1, int(n)))
+    _FULL_SUPPORT_CACHE[n] = (h_indices, j_pairs)
+    return _FULL_SUPPORT_CACHE[n]
+
+
+def resolve_support_signature(model_dyn: IsingModel, cache_mode: str) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]:
+    if cache_mode == "support":
+        return support_signature_sparse(model_dyn)
+    if cache_mode == "full":
+        return support_signature_full(model_dyn.n)
+    raise ValueError(f"Unknown transpile cache mode: {cache_mode}")
+
+
+def bump_cache_stat(cache_stats: Optional[Dict[str, int]], key: str) -> None:
+    if cache_stats is None:
+        return
+    cache_stats[key] = cache_stats.get(key, 0) + 1
 
 
 def build_parameterized_anneal_circuits(
@@ -336,27 +363,41 @@ def get_transpiled_template(
     trotter_order: int,
     seed_transpiler: int,
     include_measurements: bool,
+    cache_mode: str,
     cache: Optional[Dict[Tuple[Any, ...], TranspiledTemplate]],
     cache_stats: Optional[Dict[str, int]],
 ) -> TranspiledTemplate:
-    h_indices, j_pairs = support_signature(model_dyn)
-    key = (
-        model_dyn.n,
-        h_indices,
-        j_pairs,
-        int(k_max),
-        float(delta_t),
-        int(trotter_order),
-        bool(include_measurements),
-    )
+    h_indices, j_pairs = resolve_support_signature(model_dyn, cache_mode=cache_mode)
+
+    if cache_mode == "support":
+        key = (
+            model_dyn.n,
+            cache_mode,
+            h_indices,
+            j_pairs,
+            int(k_max),
+            float(delta_t),
+            int(trotter_order),
+            bool(include_measurements),
+        )
+    else:
+        key = (
+            model_dyn.n,
+            cache_mode,
+            int(k_max),
+            float(delta_t),
+            int(trotter_order),
+            bool(include_measurements),
+        )
 
     if cache is not None and key in cache:
-        if cache_stats is not None:
-            if include_measurements:
-                cache_stats["measured_hits"] = cache_stats.get("measured_hits", 0) + 1
-            else:
-                cache_stats["unmeasured_hits"] = cache_stats.get("unmeasured_hits", 0) + 1
+        bump_cache_stat(cache_stats, "measured_hits" if include_measurements else "unmeasured_hits")
         return cache[key]
+
+    if cache is None:
+        bump_cache_stat(cache_stats, "measured_bypassed" if include_measurements else "unmeasured_bypassed")
+    else:
+        bump_cache_stat(cache_stats, "measured_misses" if include_measurements else "unmeasured_misses")
 
     circuits, h_params, j_params = build_parameterized_anneal_circuits(
         n=model_dyn.n,
@@ -383,11 +424,6 @@ def get_transpiled_template(
     )
     if cache is not None:
         cache[key] = template
-    if cache_stats is not None:
-        if include_measurements:
-            cache_stats["measured_misses"] = cache_stats.get("measured_misses", 0) + 1
-        else:
-            cache_stats["unmeasured_misses"] = cache_stats.get("unmeasured_misses", 0) + 1
     return template
 
 
@@ -397,7 +433,7 @@ def bind_template_circuits(template: TranspiledTemplate, model_dyn: IsingModel) 
     for i in template.h_indices:
         bind_map[template.h_params[i]] = float(model_dyn.h[i])
     for pair in template.j_pairs:
-        bind_map[template.j_params[pair]] = float(j_lookup[pair])
+        bind_map[template.j_params[pair]] = float(j_lookup.get(pair, 0.0))
     return [qc.assign_parameters(bind_map, inplace=False, strict=False) for qc in template.circuits]
 
 
@@ -658,6 +694,7 @@ def run_instance_sweep(
     shots: int,
     seed: int,
     seed_transpiler: int,
+    cache_mode: str,
     estimator: Optional[EstimatorV2] = None,
     estimator_precision: Optional[float] = None,
     use_transpile_cache: bool = True,
@@ -678,6 +715,7 @@ def run_instance_sweep(
         trotter_order=trotter_order,
         seed_transpiler=seed_transpiler,
         include_measurements=True,
+        cache_mode=cache_mode,
         cache=measured_template_cache if use_transpile_cache else None,
         cache_stats=cache_stats,
     )
@@ -705,6 +743,7 @@ def run_instance_sweep(
             trotter_order=trotter_order,
             seed_transpiler=seed_transpiler,
             include_measurements=False,
+            cache_mode=cache_mode,
             cache=unmeasured_template_cache if use_transpile_cache else None,
             cache_stats=cache_stats,
         )
@@ -740,14 +779,21 @@ def run_benchmark_for_n(
     backend = build_backend(args, n=n)
     print(f"[n={n}] [backend] Aer method={backend.options.method}")
     estimator = EstimatorV2.from_backend(backend) if bool(args.estimator_diagnostics) else None
-    use_transpile_cache = not bool(args.no_transpile_cache)
+    cache_requested = not bool(args.no_transpile_cache)
+    use_transpile_cache = bool(cache_requested)
+    cache_mode = str(args.transpile_cache_mode)
+    cache_autodisable_enabled = bool(cache_requested and not bool(args.no_cache_autodisable))
+    cache_autodisable_triggered = False
+    cache_autodisable_reason: Optional[str] = None
     measured_template_cache: Dict[Tuple[Any, ...], TranspiledTemplate] = {}
     unmeasured_template_cache: Dict[Tuple[Any, ...], TranspiledTemplate] = {}
     cache_stats: Dict[str, int] = {
         "measured_hits": 0,
         "measured_misses": 0,
+        "measured_bypassed": 0,
         "unmeasured_hits": 0,
         "unmeasured_misses": 0,
+        "unmeasured_bypassed": 0,
     }
 
     families = ["random", "maxcut", "mis"]
@@ -796,6 +842,7 @@ def run_benchmark_for_n(
                 shots=int(args.shots),
                 seed=run_seed,
                 seed_transpiler=int(seed_base) + fam_idx * 100000,
+                cache_mode=cache_mode,
                 estimator=estimator,
                 estimator_precision=args.estimator_precision,
                 use_transpile_cache=use_transpile_cache,
@@ -841,6 +888,20 @@ def run_benchmark_for_n(
                 reached_opt=reached,
             )
             all_rows.append(row)
+
+            if cache_autodisable_enabled and use_transpile_cache:
+                attempts = int(cache_stats.get("measured_hits", 0) + cache_stats.get("measured_misses", 0))
+                if attempts >= int(args.cache_autodisable_min_attempts):
+                    hit_rate = float(cache_stats.get("measured_hits", 0)) / float(max(1, attempts))
+                    if hit_rate < float(args.cache_autodisable_min_hit_rate):
+                        use_transpile_cache = False
+                        cache_autodisable_enabled = False
+                        cache_autodisable_triggered = True
+                        cache_autodisable_reason = (
+                            f"auto-disabled cache after {attempts} measured template requests: "
+                            f"hit_rate={hit_rate:.3f} < threshold={float(args.cache_autodisable_min_hit_rate):.3f}"
+                        )
+                        print(f"[n={n}] [cache] {cache_autodisable_reason}")
 
             if (inst_id + 1) % max(1, (int(args.instances) // 10)) == 0:
                 print(f"  instance {inst_id + 1}/{args.instances} done")
@@ -888,7 +949,16 @@ def run_benchmark_for_n(
         "scale_dynamics": str(args.scale_dynamics),
         "stats_method": str(args.stats_method),
         "transpile_cache": {
-            "enabled": bool(use_transpile_cache),
+            "enabled": bool(cache_requested),
+            "effective_enabled_final": bool(use_transpile_cache),
+            "mode": str(cache_mode),
+            "auto_disable": {
+                "enabled": bool(cache_requested and not bool(args.no_cache_autodisable)),
+                "min_attempts": int(args.cache_autodisable_min_attempts),
+                "min_hit_rate": float(args.cache_autodisable_min_hit_rate),
+                "triggered": bool(cache_autodisable_triggered),
+                "reason": cache_autodisable_reason,
+            },
             **cache_stats,
         },
         "estimator_diagnostics": {
@@ -1113,6 +1183,30 @@ def main() -> None:
         help="Disable transpile-template reuse across instances.",
     )
     ap.add_argument(
+        "--transpile-cache-mode",
+        type=str,
+        default="support",
+        choices=["support", "full"],
+        help="Cache template mode: 'support' keys by nonzero term pattern, 'full' keys by n/schedule only.",
+    )
+    ap.add_argument(
+        "--no-cache-autodisable",
+        action="store_true",
+        help="Do not auto-disable cache when measured-template hit rate stays below threshold.",
+    )
+    ap.add_argument(
+        "--cache-autodisable-min-attempts",
+        type=int,
+        default=12,
+        help="Minimum measured-template requests before auto-disable check.",
+    )
+    ap.add_argument(
+        "--cache-autodisable-min-hit-rate",
+        type=float,
+        default=0.05,
+        help="Auto-disable cache when measured hit-rate falls below this threshold.",
+    )
+    ap.add_argument(
         "--estimator-diagnostics",
         action="store_true",
         help="Compute EstimatorV2 expectation-energy diagnostics alongside shot-based curves.",
@@ -1143,6 +1237,10 @@ def main() -> None:
         raise SystemExit("--perm-iterations must be positive.")
     if args.estimator_precision is not None and float(args.estimator_precision) <= 0.0:
         raise SystemExit("--estimator-precision must be positive.")
+    if int(args.cache_autodisable_min_attempts) <= 0:
+        raise SystemExit("--cache-autodisable-min-attempts must be positive.")
+    if not (0.0 <= float(args.cache_autodisable_min_hit_rate) <= 1.0):
+        raise SystemExit("--cache-autodisable-min-hit-rate must be in [0, 1].")
 
     try:
         n_values = parse_n_list(args.n, args.n_list)

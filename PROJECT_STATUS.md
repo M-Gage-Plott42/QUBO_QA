@@ -28,7 +28,10 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - `--n-list` multi-size scan mode and `scan_summary.csv`
 - Graph relabeling for MaxCut/MIS (BFS high-degree ordering) to improve linear locality for MPS
 - Modern Aer primitives sampling via `SamplerV2.from_backend(...)`
-- Transpile/template reuse across instances (enabled by default; disable via `--no-transpile-cache`)
+- Transpile/template reuse across instances with cache modes:
+  - `support` mode (keyed by nonzero support signature)
+  - `full` mode (keyed by `n` and schedule, broader reuse)
+  - auto-disable fallback for low measured-template hit rates
 - Optional Estimator diagnostics via `--estimator-diagnostics` and `--estimator-precision`
   - Writes `expectation_energy.png`
   - Adds estimator diagnostics keys to `summary.json`
@@ -66,6 +69,17 @@ Executed successfully in this repo:
 - `make scan-smoke`
 - Estimator diagnostics smoke:
   - `.venv/bin/python qa_adiabatic_steps_bench.py -n 4 --instances 2 --t-max 1 --shots 16 --aer-method statevector --opt-ref exact --estimator-diagnostics --outdir /tmp/qa_estimator_diag`
+
+## Patch Compliance Policy (Required)
+
+After any patch to benchmark code or CLI, run before commit:
+- `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
+- `make smoke`
+- `make smoke-perm`
+- `make scan-smoke`
+- A targeted audit for the modified subsystem (for example cache on/off artifact audit, estimator diagnostics audit, or stats audit)
+
+Commit only after these checks pass and audit results are reviewed.
 
 ## Open Risks / Gaps
 

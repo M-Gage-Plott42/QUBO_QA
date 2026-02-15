@@ -18,7 +18,10 @@ The simulator uses Qiskit Aer with:
 - Modern Qiskit Aer primitives path for sampling (`SamplerV2.from_backend`)
 - Optional modern diagnostics via `EstimatorV2` expectation-energy curves
 - Graph relabeling (BFS from highest-degree node) for MaxCut/MIS to improve linear edge locality for MPS
-- Parameterized transpile-template reuse across instances (can be disabled with `--no-transpile-cache`)
+- Parameterized transpile-template reuse across instances with modes:
+  - `--transpile-cache-mode support` (keyed by nonzero term pattern)
+  - `--transpile-cache-mode full` (keyed by `n` + schedule, better reuse for heterogeneous instances)
+  - optional auto-disable fallback when cache hit rate stays too low
 - Statistical testing modes:
   - `--stats-method mw` (one-sided Mann-Whitney U, random < comparator)
   - `--stats-method perm` (one-sided permutation test on median difference)
@@ -122,8 +125,20 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.
-- Default transpile-template reuse reduces repeated compile overhead across instances; use `--no-transpile-cache` to disable.
+- Transpile cache can be controlled with `--transpile-cache-mode {support,full}` and `--no-transpile-cache`.
+- Low-yield cache runs can auto-disable caching via hit-rate fallback (`--cache-autodisable-*`, `--no-cache-autodisable`).
 - `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
+
+## Patch Compliance Policy
+
+After any code patch to benchmark logic, CLI, caching, stats, or outputs, run and verify:
+- `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
+- `make smoke`
+- `make smoke-perm`
+- `make scan-smoke`
+- Targeted subsystem audit for the changed area (for example cache on/off artifact audit, estimator diagnostics smoke, or stats sanity check)
+
+Only commit after these checks pass and audit findings are reviewed.
 
 ## Qiskit v2 Alignment Notes (2026-02-15)
 
