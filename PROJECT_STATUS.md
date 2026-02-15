@@ -57,6 +57,8 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - optional `hardness_proxy` via exact-solver degeneracy/gap proxy (`--hardness-proxy exact`)
 - Optional classical baseline track:
   - `--classical-baseline sa` for side-by-side QA vs SA quality/runtime comparison in `summary.json`
+- Separate PRR-style analog prototype script:
+  - `prr_local_detuning_opt.py` (piecewise local-detuning optimization with BFGS/NM/BFGS)
 
 ## Output Contract
 

@@ -26,6 +26,7 @@ The simulator uses Qiskit Aer with:
   - `--stats-method mw` (one-sided Mann-Whitney U, random < comparator)
   - `--stats-method perm` (one-sided permutation test on median difference)
 - Multi-`n` scan mode via `--n-list` with aggregated `scan_summary.csv`
+- Separate PRR-style analog prototype via `prr_local_detuning_opt.py`
 
 ## Quickstart
 
@@ -116,6 +117,16 @@ Enable estimator diagnostics (writes `expectation_energy.png`):
   --aer-method statevector --opt-ref exact --estimator-diagnostics
 ```
 
+PRR-style analog local-detuning prototype (BFGS/NM/BFGS):
+
+```bash
+.venv/bin/python prr_local_detuning_opt.py --problem maxcut -n 8 --graph-p 0.3 \
+  --maxcut-weight-low 1 --maxcut-weight-high 5 \
+  --total-time 3.5 --segments 8 --omega-max 5.0 --g-min -8 --g-max 4 --g-start -3 \
+  --maxiter-bfgs 120 --maxiter-nm 180 \
+  --outdir diagnostics_local/2026-02-15/prr_maxcut_n8
+```
+
 ## Outputs
 
 ### Single-`n` mode
@@ -156,6 +167,8 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 ## Method Notes
 
 - This is digital adiabatic simulation (Trotterized circuit evolution), not analog hardware quantum annealing.
+- A separate analog prototype (`prr_local_detuning_opt.py`) is available for PRR-style
+  local-detuning pulse optimization with a BFGS/NM/BFGS sequence.
 - `--opt-ref exact` uses brute-force exact solving (`dimod.ExactSolver`) and is intended for small `n`.
 - `--opt-ref qa_best` uses the best observed final energy as the reference optimum.
 - Weighted controls:
