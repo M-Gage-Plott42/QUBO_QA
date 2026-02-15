@@ -1233,6 +1233,34 @@ def main() -> None:
 
     ap.add_argument("--stats-method", type=str, default="mw", choices=["mw", "perm"])
     ap.add_argument("--perm-iterations", type=int, default=10000)
+    ap.add_argument(
+        "--scan-stop-p-holm-threshold",
+        type=float,
+        default=None,
+        help=(
+            "Optional --n-list early stop: require max Holm-adjusted p-value to be >= this threshold "
+            "alongside the easy-case threshold criterion."
+        ),
+    )
+    ap.add_argument(
+        "--scan-stop-easy-case-threshold",
+        type=float,
+        default=None,
+        help="Optional --n-list early stop threshold for overall mean easy-case rate.",
+    )
+    ap.add_argument(
+        "--scan-stop-easy-case-op",
+        type=str,
+        default="le",
+        choices=["le", "ge"],
+        help="Comparison operator for easy-case threshold in scan-stop criterion: le means <=, ge means >=.",
+    )
+    ap.add_argument(
+        "--scan-stop-min-n-evals",
+        type=int,
+        default=1,
+        help="Minimum number of evaluated n values before applying scan-stop checks.",
+    )
 
     ap.add_argument("--outdir", type=str, default="qa_out")
     ap.add_argument("--no-plots", action="store_true")
@@ -1254,6 +1282,23 @@ def main() -> None:
         raise SystemExit("--cache-autodisable-min-attempts must be positive.")
     if not (0.0 <= float(args.cache_autodisable_min_hit_rate) <= 1.0):
         raise SystemExit("--cache-autodisable-min-hit-rate must be in [0, 1].")
+    if int(args.scan_stop_min_n_evals) <= 0:
+        raise SystemExit("--scan-stop-min-n-evals must be positive.")
+    scan_stop_configured = (
+        args.scan_stop_p_holm_threshold is not None or args.scan_stop_easy_case_threshold is not None
+    )
+    if scan_stop_configured and (
+        args.scan_stop_p_holm_threshold is None or args.scan_stop_easy_case_threshold is None
+    ):
+        raise SystemExit(
+            "--scan-stop-p-holm-threshold and --scan-stop-easy-case-threshold must be provided together."
+        )
+    if args.scan_stop_p_holm_threshold is not None and not (0.0 <= float(args.scan_stop_p_holm_threshold) <= 1.0):
+        raise SystemExit("--scan-stop-p-holm-threshold must be in [0, 1].")
+    if args.scan_stop_easy_case_threshold is not None and not (
+        0.0 <= float(args.scan_stop_easy_case_threshold) <= 1.0
+    ):
+        raise SystemExit("--scan-stop-easy-case-threshold must be in [0, 1].")
 
     try:
         n_values = parse_n_list(args.n, args.n_list)
@@ -1268,6 +1313,9 @@ def main() -> None:
         return
 
     scan_rows: List[Dict[str, Any]] = []
+    scan_stop_enabled = bool(
+        args.scan_stop_p_holm_threshold is not None and args.scan_stop_easy_case_threshold is not None
+    )
     for idx, n in enumerate(n_values):
         n_outdir = os.path.join(args.outdir, f"n_{n}")
         stats = run_benchmark_for_n(args, n=n, outdir=n_outdir, seed_base=int(args.seed) + idx * 1_000_000)
@@ -1277,6 +1325,33 @@ def main() -> None:
         steps_summary = stats["steps_summary"]
         easy_case = stats.get("easy_case") or {}
         easy_case_rates = easy_case.get("rate") or {}
+        p_holm_values = [float(v) for v in pvals_holm.values() if isinstance(v, (int, float))]
+        p_holm_max = float(max(p_holm_values)) if p_holm_values else None
+        easy_case_overall_mean_rate = easy_case.get("overall_mean_rate", "")
+        easy_case_overall_mean_rate_num = (
+            float(easy_case_overall_mean_rate)
+            if isinstance(easy_case_overall_mean_rate, (int, float))
+            else None
+        )
+        scan_stop_triggered = False
+        scan_stop_reason = ""
+        if scan_stop_enabled and (idx + 1) >= int(args.scan_stop_min_n_evals):
+            p_stop = float(args.scan_stop_p_holm_threshold)
+            easy_stop = float(args.scan_stop_easy_case_threshold)
+            if p_holm_max is not None and easy_case_overall_mean_rate_num is not None:
+                easy_condition = (
+                    easy_case_overall_mean_rate_num <= easy_stop
+                    if str(args.scan_stop_easy_case_op) == "le"
+                    else easy_case_overall_mean_rate_num >= easy_stop
+                )
+                if p_holm_max >= p_stop and easy_condition:
+                    scan_stop_triggered = True
+                    scan_stop_reason = (
+                        f"scan-stop triggered at n={n}: "
+                        f"max_holm_p={p_holm_max:.4g} >= {p_stop:.4g} and "
+                        f"overall_mean_easy_case_rate={easy_case_overall_mean_rate_num:.4g} "
+                        f"{args.scan_stop_easy_case_op} {easy_stop:.4g}"
+                    )
 
         scan_rows.append(
             {
@@ -1290,6 +1365,12 @@ def main() -> None:
                 "maxcut_easy_case_rate": easy_case_rates.get("maxcut", ""),
                 "mis_easy_case_rate": easy_case_rates.get("mis", ""),
                 "overall_mean_easy_case_rate": easy_case.get("overall_mean_rate", ""),
+                "scan_stop_triggered": int(scan_stop_triggered),
+                "scan_stop_reason": scan_stop_reason,
+                "scan_stop_p_holm_max": p_holm_max if p_holm_max is not None else "",
+                "scan_stop_p_holm_threshold": args.scan_stop_p_holm_threshold if scan_stop_enabled else "",
+                "scan_stop_easy_case_threshold": args.scan_stop_easy_case_threshold if scan_stop_enabled else "",
+                "scan_stop_easy_case_op": args.scan_stop_easy_case_op if scan_stop_enabled else "",
                 "p_random_vs_maxcut": pvals.get("random_vs_maxcut", ""),
                 "p_random_vs_mis": pvals.get("random_vs_mis", ""),
                 "p_holm_random_vs_maxcut": pvals_holm.get("random_vs_maxcut", ""),
@@ -1299,6 +1380,9 @@ def main() -> None:
                 "n_outdir": n_outdir,
             }
         )
+        if scan_stop_triggered:
+            print(f"[scan] {scan_stop_reason}")
+            break
 
     scan_csv_path = os.path.join(args.outdir, "scan_summary.csv")
     with open(scan_csv_path, "w", newline="", encoding="utf-8") as f:
@@ -1315,6 +1399,12 @@ def main() -> None:
                 "maxcut_easy_case_rate",
                 "mis_easy_case_rate",
                 "overall_mean_easy_case_rate",
+                "scan_stop_triggered",
+                "scan_stop_reason",
+                "scan_stop_p_holm_max",
+                "scan_stop_p_holm_threshold",
+                "scan_stop_easy_case_threshold",
+                "scan_stop_easy_case_op",
                 "p_random_vs_maxcut",
                 "p_random_vs_mis",
                 "p_holm_random_vs_maxcut",

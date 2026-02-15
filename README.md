@@ -116,7 +116,7 @@ Default output directory: `qa_out/`
 
 If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - `qa_scan/n_4/`, `qa_scan/n_5/`, `qa_scan/n_6/` (each with per-`n` results and summary)
-- `qa_scan/scan_summary.csv` (one row per `n`, medians, easy-case rates, p-values, Holm-adjusted p-values, Cliff's deltas)
+- `qa_scan/scan_summary.csv` (one row per `n`, medians, easy-case rates, p-values, Holm-adjusted p-values, Cliff's deltas, and scan-stop audit fields)
 
 ## Output Policy
 
@@ -146,6 +146,10 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Transpile cache can be controlled with `--transpile-cache-mode {support,full}` and `--no-transpile-cache`.
 - Low-yield cache runs can auto-disable caching via hit-rate fallback (`--cache-autodisable-*`, `--no-cache-autodisable`).
 - `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
+- Optional `--n-list` early-stop is available when both are provided:
+  - `--scan-stop-p-holm-threshold` and `--scan-stop-easy-case-threshold`
+  - optional tuning via `--scan-stop-easy-case-op {le,ge}` and `--scan-stop-min-n-evals`
+  - when triggered, scanning stops early and `scan_summary.csv` records trigger metadata.
 
 ## Patch Compliance Policy
 
