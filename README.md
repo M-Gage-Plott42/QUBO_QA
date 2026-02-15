@@ -74,6 +74,14 @@ Permutation-statistics run:
   --stats-method perm --perm-iterations 10000
 ```
 
+Side-by-side SA baseline comparison:
+
+```bash
+.venv/bin/python qa_adiabatic_steps_bench.py -n 8 --instances 20 --t-max 8 --shots 128 \
+  --aer-method statevector --opt-ref exact \
+  --classical-baseline sa --baseline-sa-reads 256 --baseline-sa-sweeps 2000
+```
+
 `n`-scan run:
 
 ```bash
@@ -175,6 +183,8 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - `summary.json` includes paper-aligned metrics:
   - `approximation_ratio` (per-family mean/median at `t_max`, minimization ratio in `[0,1]`)
   - optional `hardness_proxy` when `--hardness-proxy exact` is enabled
+- `summary.json` includes optional classical baseline comparison metadata under `classical_baseline`
+  when `--classical-baseline sa` is enabled.
 - Success curves are reported in two variants:
   - cumulative-by-time (`success_prob.png`, computed from best-so-far trajectories),
   - instantaneous-at-time (`success_prob_instantaneous.png`, computed from per-step sampled energies).

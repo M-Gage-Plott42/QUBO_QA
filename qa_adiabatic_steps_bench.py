@@ -670,6 +670,30 @@ def exact_hardness_proxy_from_sampleset(sampleset: dimod.SampleSet, tol: float =
     return float(competing_deg / (d_opt * first_gap))
 
 
+def run_sa_baseline(
+    bqm: dimod.BinaryQuadraticModel,
+    num_reads: int,
+    num_sweeps: int,
+    seed: int,
+) -> Tuple[float, float]:
+    """
+    Classical simulated-annealing baseline for side-by-side comparisons.
+
+    Returns:
+      (best_energy, walltime_seconds)
+    """
+    sampler = dimod.reference.samplers.SimulatedAnnealingSampler()
+    start = time.perf_counter()
+    np_state = np.random.get_state()
+    try:
+        np.random.seed(int(seed) % (2**32))
+        sampleset = sampler.sample(bqm, num_reads=int(num_reads), num_sweeps=int(num_sweeps))
+    finally:
+        np.random.set_state(np_state)
+    elapsed = float(time.perf_counter() - start)
+    return float(sampleset.first.energy), elapsed
+
+
 def parse_n_list(n_single: Optional[int], n_list: str) -> List[int]:
     if n_list:
         values: List[int] = []
@@ -859,11 +883,17 @@ def run_benchmark_for_n(
         {f: [] for f in families} if bool(args.estimator_diagnostics) else None
     )
     opt_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    qa_final_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
     approx_ratios_by_family: Dict[str, List[float]] = {f: [] for f in families}
     hardness_proxy_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    baseline_final_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    baseline_runtimes_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    baseline_approx_ratios_by_family: Dict[str, List[float]] = {f: [] for f in families}
     steps_to_opt: Dict[str, List[int]] = {f: [] for f in families}
     all_rows: List[InstanceResult] = []
     walltime_seconds_by_family: Dict[str, float] = {}
+    baseline_method = str(args.classical_baseline)
+    baseline_enabled = baseline_method != "none"
 
     for fam_idx, fam in enumerate(families):
         family_started_wall = time.perf_counter()
@@ -936,9 +966,22 @@ def run_benchmark_for_n(
             else:
                 opt_energy = float(best_so_far[-1])
             opt_energies_by_family[fam].append(opt_energy)
+            qa_final_energies_by_family[fam].append(float(best_so_far[-1]))
             approx_ratios_by_family[fam].append(
                 approximation_ratio_minimization(obtained=float(best_so_far[-1]), optimal=opt_energy)
             )
+            if baseline_enabled and baseline_method == "sa":
+                baseline_best, baseline_runtime = run_sa_baseline(
+                    bqm=bqm,
+                    num_reads=int(args.baseline_sa_reads),
+                    num_sweeps=int(args.baseline_sa_sweeps),
+                    seed=int(run_seed) + 777777,
+                )
+                baseline_final_energies_by_family[fam].append(float(baseline_best))
+                baseline_runtimes_by_family[fam].append(float(baseline_runtime))
+                baseline_approx_ratios_by_family[fam].append(
+                    approximation_ratio_minimization(obtained=float(baseline_best), optimal=opt_energy)
+                )
 
             tol = 1e-9
             hit = np.where(best_so_far <= opt_energy + tol)[0]
@@ -1119,6 +1162,41 @@ def run_benchmark_for_n(
                 "mis": float(np.median(hardness_proxy_by_family["mis"])) if hardness_proxy_by_family["mis"] else None,
             },
         }
+    if baseline_enabled and baseline_method == "sa":
+        baseline_stats: Dict[str, Any] = {
+            "enabled": True,
+            "method": "sa",
+            "sa_config": {
+                "num_reads": int(args.baseline_sa_reads),
+                "num_sweeps": int(args.baseline_sa_sweeps),
+            },
+            "runtime_seconds_total": float(
+                np.sum(baseline_runtimes_by_family["random"])
+                + np.sum(baseline_runtimes_by_family["maxcut"])
+                + np.sum(baseline_runtimes_by_family["mis"])
+            ),
+            "by_family": {},
+        }
+        for fam in families:
+            opt = np.asarray(opt_energies_by_family[fam], dtype=float)
+            qa_e = np.asarray(qa_final_energies_by_family[fam], dtype=float)
+            bl_e = np.asarray(baseline_final_energies_by_family[fam], dtype=float)
+            qa_gap = qa_e - opt
+            bl_gap = bl_e - opt
+            baseline_stats["by_family"][fam] = {
+                "qa_mean_final_energy": float(np.mean(qa_e)),
+                "baseline_mean_final_energy": float(np.mean(bl_e)),
+                "qa_mean_gap_to_opt": float(np.mean(qa_gap)),
+                "baseline_mean_gap_to_opt": float(np.mean(bl_gap)),
+                "qa_success_rate_vs_opt": float(np.mean(qa_e <= opt + 1e-9)),
+                "baseline_success_rate_vs_opt": float(np.mean(bl_e <= opt + 1e-9)),
+                "qa_approx_ratio_mean": float(np.mean(approx_ratios_by_family[fam])),
+                "baseline_approx_ratio_mean": float(np.mean(baseline_approx_ratios_by_family[fam])),
+                "baseline_runtime_seconds_mean_per_instance": float(np.mean(baseline_runtimes_by_family[fam])),
+            }
+        stats["classical_baseline"] = baseline_stats
+    else:
+        stats["classical_baseline"] = {"enabled": False, "method": "none"}
     if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
         stats["estimator_expectation_at_tmax"] = {
             "random": float(exp_random[-1]),
@@ -1389,6 +1467,25 @@ def main() -> None:
             "'exact' uses exact-solver degeneracy/gap information (requires --opt-ref exact)."
         ),
     )
+    ap.add_argument(
+        "--classical-baseline",
+        type=str,
+        default="none",
+        choices=["none", "sa"],
+        help="Optional classical baseline track for side-by-side comparison.",
+    )
+    ap.add_argument(
+        "--baseline-sa-reads",
+        type=int,
+        default=128,
+        help="Number of reads for the SA baseline when --classical-baseline sa.",
+    )
+    ap.add_argument(
+        "--baseline-sa-sweeps",
+        type=int,
+        default=1000,
+        help="Number of sweeps for the SA baseline when --classical-baseline sa.",
+    )
 
     ap.add_argument("--stats-method", type=str, default="mw", choices=["mw", "perm"])
     ap.add_argument("--perm-iterations", type=int, default=10000)
@@ -1465,6 +1562,10 @@ def main() -> None:
         )
     if str(args.hardness_proxy) == "exact" and str(args.opt_ref) != "exact":
         raise SystemExit("--hardness-proxy=exact requires --opt-ref exact.")
+    if int(args.baseline_sa_reads) <= 0:
+        raise SystemExit("--baseline-sa-reads must be positive.")
+    if int(args.baseline_sa_sweeps) <= 0:
+        raise SystemExit("--baseline-sa-sweeps must be positive.")
     if args.stats_method == "perm" and int(args.perm_iterations) <= 0:
         raise SystemExit("--perm-iterations must be positive.")
     if args.estimator_precision is not None and float(args.estimator_precision) <= 0.0:

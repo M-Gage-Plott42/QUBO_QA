@@ -55,6 +55,8 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - Paper-aligned summary metrics:
   - `approximation_ratio` per family at `t_max`
   - optional `hardness_proxy` via exact-solver degeneracy/gap proxy (`--hardness-proxy exact`)
+- Optional classical baseline track:
+  - `--classical-baseline sa` for side-by-side QA vs SA quality/runtime comparison in `summary.json`
 
 ## Output Contract
 
