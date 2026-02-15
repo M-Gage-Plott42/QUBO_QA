@@ -34,6 +34,21 @@ make install
 make smoke
 ```
 
+## New Workstation Checklist
+
+```bash
+git clone git@github.com:M-Gage-Plott42/QUBO_QA.git
+cd QUBO_QA
+make install
+make smoke
+make smoke-perm
+make scan-smoke
+```
+
+- Use `python3`/`.venv/bin/python` on Linux/WSL.
+- Keep provenance runs under `artifacts/...` when you intend to commit outputs.
+- Keep exploratory or failed runs under `diagnostics_local/...` (untracked by policy).
+
 ## Run Examples
 
 Small exact sanity check:

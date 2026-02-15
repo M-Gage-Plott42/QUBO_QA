@@ -4,7 +4,7 @@
 
 - Date: 2026-02-15
 - Branch: `main`
-- Head commit: `057f8da`
+- Head commit: `c9afda4`
 - Repo: `git@github.com:M-Gage-Plott42/QUBO_QA.git`
 
 ## Purpose
@@ -72,6 +72,18 @@ Executed successfully in this repo:
 - `make scan-smoke`
 - Estimator diagnostics smoke:
   - `.venv/bin/python qa_adiabatic_steps_bench.py -n 4 --instances 2 --t-max 1 --shots 16 --aer-method statevector --opt-ref exact --estimator-diagnostics --outdir /tmp/qa_estimator_diag`
+
+## Workstation Handoff Checklist
+
+On a new workstation/clone, run:
+- `make install`
+- `make smoke`
+- `make smoke-perm`
+- `make scan-smoke`
+
+Then confirm policy behavior:
+- commit-intended outputs go under `artifacts/...`
+- exploratory outputs go under `diagnostics_local/...` (ignored)
 
 ## Patch Compliance Policy (Required)
 
