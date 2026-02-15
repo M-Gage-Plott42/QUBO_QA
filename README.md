@@ -98,6 +98,21 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.
 
+## Qiskit v2 Alignment Notes (2026-02-15)
+
+Validated against `M-Gage-Plott42/qiskit-v2-guide` (Qiskit 2.3.x patterns):
+- Hamiltonian-to-gate mapping is consistent:
+  - driver term `-sum X` is implemented as `rx(-2 t)`,
+  - problem terms are implemented as `rz(2 t h)` and `rzz(2 t J)`.
+- Measurement/energy path is consistent:
+  - Qiskit counts are treated as MSB-first classical strings,
+  - keys are reversed to qubit-0-first before Ising energy evaluation.
+- Aer backend usage remains valid for Qiskit 2.x:
+  - `AerSimulator` construction and `transpile(..., num_processes=1)` usage are working,
+  - MPS options used by this script are recognized by Aer (`qiskit-aer 0.17.2`),
+  - auto-switch to MPS at `n >= --mps-auto-threshold` is functioning.
+- No CLI or output-contract changes were required from this audit.
+
 ## Makefile Shortcuts
 
 - `make smoke` for quick baseline check
