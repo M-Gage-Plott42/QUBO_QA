@@ -16,7 +16,9 @@ The simulator uses Qiskit Aer with:
 - Three benchmark families: Random / MaxCut / MIS
 - Success-probability curves vs time (`success_prob.png`)
 - Modern Qiskit Aer primitives path for sampling (`SamplerV2.from_backend`)
+- Optional modern diagnostics via `EstimatorV2` expectation-energy curves
 - Graph relabeling (BFS from highest-degree node) for MaxCut/MIS to improve linear edge locality for MPS
+- Parameterized transpile-template reuse across instances (can be disabled with `--no-transpile-cache`)
 - Statistical testing modes:
   - `--stats-method mw` (one-sided Mann-Whitney U, random < comparator)
   - `--stats-method perm` (one-sided permutation test on median difference)
@@ -72,6 +74,13 @@ Try `n=42` (sparse random QUBO recommended):
   --mps-truncation-threshold 1e-8
 ```
 
+Enable estimator diagnostics (writes `expectation_energy.png`):
+
+```bash
+.venv/bin/python qa_adiabatic_steps_bench.py -n 6 --instances 10 --t-max 5 --shots 64 \
+  --aer-method statevector --opt-ref exact --estimator-diagnostics
+```
+
 ## Outputs
 
 ### Single-`n` mode
@@ -82,6 +91,7 @@ Default output directory: `qa_out/`
 - `summary.json` (aggregate metrics + test results)
 - `convergence_energy.png` (median best-so-far energy vs time)
 - `success_prob.png` (success probability vs time)
+- `expectation_energy.png` (optional, only with `--estimator-diagnostics`)
 - `steps_boxplot.png` (steps-to-opt distribution)
 
 ### `--n-list` scan mode
@@ -98,6 +108,8 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.
+- Default transpile-template reuse reduces repeated compile overhead across instances; use `--no-transpile-cache` to disable.
+- `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
 
 ## Qiskit v2 Alignment Notes (2026-02-15)
 

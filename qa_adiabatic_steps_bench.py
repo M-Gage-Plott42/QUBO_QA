@@ -23,6 +23,7 @@ Convergence metric:
 Outputs:
   - convergence_energy.png : one plot with 3 curves (Random/MaxCut/MIS), median best-so-far energy vs time
   - success_prob.png : one plot with 3 curves, success probability vs time
+  - expectation_energy.png : optional estimator diagnostics plot (when --estimator-diagnostics is set)
   - steps_boxplot.png : distribution of steps_to_opt
   - results.csv : per-instance summary
   - summary.json : statistics (Mann-Whitney or permutation one-sided + Holm correction), effect sizes
@@ -47,8 +48,10 @@ import dimod
 import networkx as nx
 import numpy as np
 from qiskit import QuantumCircuit, transpile
+from qiskit.circuit import Parameter
+from qiskit.quantum_info import SparsePauliOp
 from qiskit_aer import AerSimulator
-from qiskit_aer.primitives import SamplerV2
+from qiskit_aer.primitives import EstimatorV2, SamplerV2
 
 try:
     from scipy.stats import mannwhitneyu
@@ -252,6 +255,177 @@ def scale_ising_for_dynamics(model: IsingModel, mode: str = "maxabs") -> Tuple[I
     h2 = model.h * scale
     j2 = [(i, j, v * scale) for (i, j, v) in model.j_terms]
     return IsingModel(n=model.n, h=h2, j_terms=j2, offset=model.offset * scale), scale
+
+
+@dataclass
+class TranspiledTemplate:
+    h_indices: Tuple[int, ...]
+    j_pairs: Tuple[Tuple[int, int], ...]
+    h_params: Dict[int, Parameter]
+    j_params: Dict[Tuple[int, int], Parameter]
+    circuits: List[QuantumCircuit]
+
+
+def support_signature(model_dyn: IsingModel, tol: float = 1e-15) -> Tuple[Tuple[int, ...], Tuple[Tuple[int, int], ...]]:
+    h_indices = tuple(i for i in range(model_dyn.n) if abs(float(model_dyn.h[i])) > tol)
+    j_pairs = sorted(
+        (
+            (int(i), int(j)) if int(i) < int(j) else (int(j), int(i))
+            for (i, j, v) in model_dyn.j_terms
+            if abs(float(v)) > tol
+        )
+    )
+    return h_indices, tuple(j_pairs)
+
+
+def build_parameterized_anneal_circuits(
+    n: int,
+    h_indices: Tuple[int, ...],
+    j_pairs: Tuple[Tuple[int, int], ...],
+    k_max: int,
+    delta_t: float,
+    trotter_order: int,
+    include_measurements: bool,
+) -> Tuple[List[QuantumCircuit], Dict[int, Parameter], Dict[Tuple[int, int], Parameter]]:
+    h_params = {i: Parameter(f"h_{i}") for i in h_indices}
+    j_params = {(i, j): Parameter(f"j_{i}_{j}") for (i, j) in j_pairs}
+
+    circuits: List[QuantumCircuit] = []
+    for k in range(0, k_max + 1):
+        if include_measurements:
+            qc = QuantumCircuit(n, n)
+        else:
+            qc = QuantumCircuit(n)
+        qc.h(range(n))
+
+        if k > 0:
+            for step in range(k):
+                s = (step + 0.5) / float(k)
+                t_d = delta_t * (1.0 - s)
+                t_p = delta_t * s
+
+                if trotter_order == 1:
+                    _apply_driver_layer(qc, n, t_d)
+                    for i in h_indices:
+                        qc.rz(2.0 * t_p * h_params[i], i)
+                    for (i, j) in j_pairs:
+                        qc.rzz(2.0 * t_p * j_params[(i, j)], i, j)
+                elif trotter_order == 2:
+                    _apply_driver_layer(qc, n, 0.5 * t_d)
+                    for i in h_indices:
+                        qc.rz(2.0 * t_p * h_params[i], i)
+                    for (i, j) in j_pairs:
+                        qc.rzz(2.0 * t_p * j_params[(i, j)], i, j)
+                    _apply_driver_layer(qc, n, 0.5 * t_d)
+                else:
+                    raise ValueError("trotter_order must be 1 or 2")
+
+        if include_measurements:
+            qc.measure(range(n), range(n))
+        qc.metadata = {"k": k}
+        circuits.append(qc)
+
+    return circuits, h_params, j_params
+
+
+def get_transpiled_template(
+    backend: AerSimulator,
+    model_dyn: IsingModel,
+    k_max: int,
+    delta_t: float,
+    trotter_order: int,
+    seed_transpiler: int,
+    include_measurements: bool,
+    cache: Optional[Dict[Tuple[Any, ...], TranspiledTemplate]],
+    cache_stats: Optional[Dict[str, int]],
+) -> TranspiledTemplate:
+    h_indices, j_pairs = support_signature(model_dyn)
+    key = (
+        model_dyn.n,
+        h_indices,
+        j_pairs,
+        int(k_max),
+        float(delta_t),
+        int(trotter_order),
+        bool(include_measurements),
+    )
+
+    if cache is not None and key in cache:
+        if cache_stats is not None:
+            if include_measurements:
+                cache_stats["measured_hits"] = cache_stats.get("measured_hits", 0) + 1
+            else:
+                cache_stats["unmeasured_hits"] = cache_stats.get("unmeasured_hits", 0) + 1
+        return cache[key]
+
+    circuits, h_params, j_params = build_parameterized_anneal_circuits(
+        n=model_dyn.n,
+        h_indices=h_indices,
+        j_pairs=j_pairs,
+        k_max=k_max,
+        delta_t=delta_t,
+        trotter_order=trotter_order,
+        include_measurements=include_measurements,
+    )
+    tqc = transpile(
+        circuits,
+        backend=backend,
+        optimization_level=0,
+        seed_transpiler=seed_transpiler,
+        num_processes=1,
+    )
+    template = TranspiledTemplate(
+        h_indices=h_indices,
+        j_pairs=j_pairs,
+        h_params=h_params,
+        j_params=j_params,
+        circuits=tqc,
+    )
+    if cache is not None:
+        cache[key] = template
+    if cache_stats is not None:
+        if include_measurements:
+            cache_stats["measured_misses"] = cache_stats.get("measured_misses", 0) + 1
+        else:
+            cache_stats["unmeasured_misses"] = cache_stats.get("unmeasured_misses", 0) + 1
+    return template
+
+
+def bind_template_circuits(template: TranspiledTemplate, model_dyn: IsingModel) -> List[QuantumCircuit]:
+    j_lookup = {(int(i), int(j)): float(v) for (i, j, v) in model_dyn.j_terms}
+    bind_map: Dict[Parameter, float] = {}
+    for i in template.h_indices:
+        bind_map[template.h_params[i]] = float(model_dyn.h[i])
+    for pair in template.j_pairs:
+        bind_map[template.j_params[pair]] = float(j_lookup[pair])
+    return [qc.assign_parameters(bind_map, inplace=False, strict=False) for qc in template.circuits]
+
+
+def ising_model_to_sparse_pauli_op(model_eval: IsingModel) -> SparsePauliOp:
+    pauli_terms: List[Tuple[str, float]] = []
+    n = model_eval.n
+
+    if model_eval.offset != 0.0:
+        pauli_terms.append(("I" * n, float(model_eval.offset)))
+
+    for i, h_i in enumerate(model_eval.h):
+        if h_i == 0.0:
+            continue
+        chars = ["I"] * n
+        chars[n - 1 - i] = "Z"
+        pauli_terms.append(("".join(chars), float(h_i)))
+
+    for (i, j, jij) in model_eval.j_terms:
+        if jij == 0.0:
+            continue
+        chars = ["I"] * n
+        chars[n - 1 - i] = "Z"
+        chars[n - 1 - j] = "Z"
+        pauli_terms.append(("".join(chars), float(jij)))
+
+    if not pauli_terms:
+        pauli_terms = [("I" * n, 0.0)]
+    return SparsePauliOp.from_list(pauli_terms)
 
 
 def _apply_driver_layer(qc: QuantumCircuit, n: int, t: float) -> None:
@@ -483,27 +657,34 @@ def run_instance_sweep(
     trotter_order: int,
     shots: int,
     seed: int,
-) -> Tuple[np.ndarray, List[str]]:
+    seed_transpiler: int,
+    estimator: Optional[EstimatorV2] = None,
+    estimator_precision: Optional[float] = None,
+    use_transpile_cache: bool = True,
+    measured_template_cache: Optional[Dict[Tuple[Any, ...], TranspiledTemplate]] = None,
+    unmeasured_template_cache: Optional[Dict[Tuple[Any, ...], TranspiledTemplate]] = None,
+    cache_stats: Optional[Dict[str, int]] = None,
+) -> Tuple[np.ndarray, List[str], Optional[np.ndarray]]:
     """
     Returns:
       energies[k] = best energy among shots at step-count k
       best_bits[k] = bitstring (qubit0-first) achieving energies[k]
     """
-    circuits: List[QuantumCircuit] = []
-    for k in range(0, k_max + 1):
-        qc = build_anneal_circuit(model_dyn, num_steps=k, delta_t=delta_t, trotter_order=trotter_order)
-        qc.metadata = {"k": k}
-        circuits.append(qc)
-
-    tqc = transpile(
-        circuits,
+    measured_template = get_transpiled_template(
         backend=backend,
-        optimization_level=0,
-        seed_transpiler=seed,
-        num_processes=1,
+        model_dyn=model_dyn,
+        k_max=k_max,
+        delta_t=delta_t,
+        trotter_order=trotter_order,
+        seed_transpiler=seed_transpiler,
+        include_measurements=True,
+        cache=measured_template_cache if use_transpile_cache else None,
+        cache_stats=cache_stats,
     )
+    measured_circuits = bind_template_circuits(measured_template, model_dyn)
+
     sampler = SamplerV2.from_backend(backend, seed=seed)
-    job = sampler.run(tqc, shots=shots)
+    job = sampler.run(measured_circuits, shots=shots)
     result = job.result()
 
     energies = np.zeros(k_max + 1, dtype=float)
@@ -513,7 +694,30 @@ def run_instance_sweep(
         e, b = best_energy_from_counts(counts, model_eval)
         energies[idx] = e
         best_bits.append(b)
-    return energies, best_bits
+
+    expectation_curve: Optional[np.ndarray] = None
+    if estimator is not None:
+        unmeasured_template = get_transpiled_template(
+            backend=backend,
+            model_dyn=model_dyn,
+            k_max=k_max,
+            delta_t=delta_t,
+            trotter_order=trotter_order,
+            seed_transpiler=seed_transpiler,
+            include_measurements=False,
+            cache=unmeasured_template_cache if use_transpile_cache else None,
+            cache_stats=cache_stats,
+        )
+        unmeasured_circuits = bind_template_circuits(unmeasured_template, model_dyn)
+        observable = ising_model_to_sparse_pauli_op(model_eval)
+        pubs = [(qc, observable.apply_layout(qc.layout)) for qc in unmeasured_circuits]
+        if estimator_precision is None:
+            est_result = estimator.run(pubs).result()
+        else:
+            est_result = estimator.run(pubs, precision=estimator_precision).result()
+        expectation_curve = np.asarray([float(est_result[idx].data.evs) for idx in range(k_max + 1)], dtype=float)
+
+    return energies, best_bits, expectation_curve
 
 
 def run_benchmark_for_n(
@@ -535,9 +739,22 @@ def run_benchmark_for_n(
     os.makedirs(outdir, exist_ok=True)
     backend = build_backend(args, n=n)
     print(f"[n={n}] [backend] Aer method={backend.options.method}")
+    estimator = EstimatorV2.from_backend(backend) if bool(args.estimator_diagnostics) else None
+    use_transpile_cache = not bool(args.no_transpile_cache)
+    measured_template_cache: Dict[Tuple[Any, ...], TranspiledTemplate] = {}
+    unmeasured_template_cache: Dict[Tuple[Any, ...], TranspiledTemplate] = {}
+    cache_stats: Dict[str, int] = {
+        "measured_hits": 0,
+        "measured_misses": 0,
+        "unmeasured_hits": 0,
+        "unmeasured_misses": 0,
+    }
 
     families = ["random", "maxcut", "mis"]
     curves_best_so_far: Dict[str, List[np.ndarray]] = {f: [] for f in families}
+    curves_expectation: Optional[Dict[str, List[np.ndarray]]] = (
+        {f: [] for f in families} if bool(args.estimator_diagnostics) else None
+    )
     opt_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
     steps_to_opt: Dict[str, List[int]] = {f: [] for f in families}
     all_rows: List[InstanceResult] = []
@@ -569,7 +786,7 @@ def run_benchmark_for_n(
             model_dyn, _dyn_scale = scale_ising_for_dynamics(model_eval, mode=str(args.scale_dynamics))
 
             run_seed = int(seed_base) + fam_idx * 100000 + inst_id
-            energies, _best_bits = run_instance_sweep(
+            energies, _best_bits, exp_curve = run_instance_sweep(
                 backend=backend,
                 model_eval=model_eval,
                 model_dyn=model_dyn,
@@ -578,10 +795,21 @@ def run_benchmark_for_n(
                 trotter_order=int(args.trotter_order),
                 shots=int(args.shots),
                 seed=run_seed,
+                seed_transpiler=int(seed_base) + fam_idx * 100000,
+                estimator=estimator,
+                estimator_precision=args.estimator_precision,
+                use_transpile_cache=use_transpile_cache,
+                measured_template_cache=measured_template_cache,
+                unmeasured_template_cache=unmeasured_template_cache,
+                cache_stats=cache_stats,
             )
 
             best_so_far = np.minimum.accumulate(energies)
             curves_best_so_far[fam].append(best_so_far)
+            if curves_expectation is not None:
+                if exp_curve is None:
+                    raise RuntimeError("Estimator diagnostics enabled but no expectation curve was produced.")
+                curves_expectation[fam].append(exp_curve)
 
             if args.opt_ref == "exact":
                 exact = dimod.ExactSolver().sample(bqm)
@@ -636,6 +864,13 @@ def run_benchmark_for_n(
     success_random = success_curve(curves_best_so_far["random"], opt_energies_by_family["random"])
     success_maxcut = success_curve(curves_best_so_far["maxcut"], opt_energies_by_family["maxcut"])
     success_mis = success_curve(curves_best_so_far["mis"], opt_energies_by_family["mis"])
+    exp_random: Optional[np.ndarray] = None
+    exp_maxcut: Optional[np.ndarray] = None
+    exp_mis: Optional[np.ndarray] = None
+    if curves_expectation is not None:
+        exp_random = agg_curve(curves_expectation["random"], agg=agg)
+        exp_maxcut = agg_curve(curves_expectation["maxcut"], agg=agg)
+        exp_mis = agg_curve(curves_expectation["mis"], agg=agg)
 
     steps_r = np.asarray(steps_to_opt["random"], dtype=float)
     steps_c = np.asarray(steps_to_opt["maxcut"], dtype=float)
@@ -652,6 +887,14 @@ def run_benchmark_for_n(
         "aer_method": str(backend.options.method),
         "scale_dynamics": str(args.scale_dynamics),
         "stats_method": str(args.stats_method),
+        "transpile_cache": {
+            "enabled": bool(use_transpile_cache),
+            **cache_stats,
+        },
+        "estimator_diagnostics": {
+            "enabled": bool(args.estimator_diagnostics),
+            "precision": args.estimator_precision,
+        },
     }
 
     stats["steps_summary"] = {
@@ -664,6 +907,12 @@ def run_benchmark_for_n(
         "maxcut": float(success_maxcut[-1]),
         "mis": float(success_mis[-1]),
     }
+    if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
+        stats["estimator_expectation_at_tmax"] = {
+            "random": float(exp_random[-1]),
+            "maxcut": float(exp_maxcut[-1]),
+            "mis": float(exp_mis[-1]),
+        }
 
     effects = {
         "delta_random_vs_maxcut": float(cliffs_delta_smaller_is_better(steps_r, steps_c)),
@@ -783,6 +1032,21 @@ def run_benchmark_for_n(
     plt.close()
     print(f"Wrote: {out_plot_success}")
 
+    if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
+        plt.figure()
+        plt.plot(t_axis, exp_random, label="Random QUBO")
+        plt.plot(t_axis, exp_maxcut, label="MaxCut QUBO")
+        plt.plot(t_axis, exp_mis, label="MIS QUBO")
+        plt.xlabel("t (dimensionless), with delta_t = %.2f" % float(args.delta_t))
+        plt.ylabel(f"{agg} estimator expectation energy")
+        plt.title(f"Estimator diagnostics vs time (n={n}, N={args.instances})")
+        plt.legend()
+        plt.tight_layout()
+        out_plot_expectation = os.path.join(outdir, "expectation_energy.png")
+        plt.savefig(out_plot_expectation, dpi=200)
+        plt.close()
+        print(f"Wrote: {out_plot_expectation}")
+
     plt.figure()
     plt.boxplot([steps_r, steps_c, steps_m], tick_labels=["Random", "MaxCut", "MIS"])
     plt.ylabel("steps_to_opt (K), where t = K * delta_t")
@@ -843,6 +1107,23 @@ def main() -> None:
     ap.add_argument("--mps-log-data", action="store_true")
     ap.add_argument("--mps-lapack", action="store_true")
 
+    ap.add_argument(
+        "--no-transpile-cache",
+        action="store_true",
+        help="Disable transpile-template reuse across instances.",
+    )
+    ap.add_argument(
+        "--estimator-diagnostics",
+        action="store_true",
+        help="Compute EstimatorV2 expectation-energy diagnostics alongside shot-based curves.",
+    )
+    ap.add_argument(
+        "--estimator-precision",
+        type=float,
+        default=None,
+        help="Optional precision target passed to EstimatorV2.run.",
+    )
+
     ap.add_argument("--stats-method", type=str, default="mw", choices=["mw", "perm"])
     ap.add_argument("--perm-iterations", type=int, default=10000)
 
@@ -860,6 +1141,8 @@ def main() -> None:
         raise SystemExit("--t-max must be nonnegative.")
     if args.stats_method == "perm" and int(args.perm_iterations) <= 0:
         raise SystemExit("--perm-iterations must be positive.")
+    if args.estimator_precision is not None and float(args.estimator_precision) <= 0.0:
+        raise SystemExit("--estimator-precision must be positive.")
 
     try:
         n_values = parse_n_list(args.n, args.n_list)
