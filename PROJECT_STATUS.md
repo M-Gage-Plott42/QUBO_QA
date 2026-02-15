@@ -104,6 +104,22 @@ Executed successfully in this repo:
   - No consistent speedup from transpile cache in this tested range.
   - Cache benchmarking is deprioritized for now.
 
+## Cache Revisit Snapshot (Larger n, 2026-02-15)
+
+- Bench root:
+  - `diagnostics_local/2026-02-15/cache_revisit_s03/`
+- Matrix:
+  - `n=12, instances=10`, cache on/off
+  - `n=14, instances=6`, cache on/off
+  - common flags: `--aer-method statevector --opt-ref exact --no-plots`, `OMP_NUM_THREADS=11`
+- Timing summary:
+  - `n12_i10`: on `25.87s`, off `25.67s`
+  - `n14_i6`: on `35.69s`, off `35.30s`
+- Cache-stat summary:
+  - cache-on runs showed zero measured-template hits in this workload (`measured_hits=0`).
+- Outcome:
+  - No observed speedup at these larger-`n` points for the tested instance mix and cache mode.
+
 ## Scan-Stop Threshold Tuning Snapshot (2026-02-15)
 
 - Baseline scan (no scan-stop):
@@ -154,7 +170,8 @@ Commit only after these checks pass and audit results are reviewed.
 
 ## Immediate Next Tasks
 
-1. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+1. No required follow-up items are currently open from the method-audit action list.
+2. Optional future work: revisit cache only if workload/instance structure changes enough to improve template-hit rates.
 
 ## Method Audit Action List (2026-02-15)
 
