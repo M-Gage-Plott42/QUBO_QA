@@ -145,6 +145,7 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Input guardrails:
   - `--random-density` and `--graph-p` must be in `[0,1]`,
   - `--random-low <= --random-high`.
+- Ising energy evaluation is aligned with `dimod` conversion conventions (`x = (s + 1)/2`, so measured bit `0 -> s=-1`, `1 -> s=+1`).
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.
@@ -163,6 +164,7 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 
 After any code patch to benchmark logic, CLI, caching, stats, or outputs, run and verify:
 - `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
+- `.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
 - `make smoke`
 - `make smoke-perm`
 - `make scan-smoke`

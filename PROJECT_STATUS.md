@@ -32,6 +32,7 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - Success-probability reporting split into:
   - cumulative-by-time success (`success_prob.png`)
   - instantaneous-at-time success (`success_prob_instantaneous.png`)
+- Ising energy evaluation aligned with `dimod` Ising/BINARY conversion convention (`x=(s+1)/2`).
 - Optional `--n-list` scan-stop criterion based on:
   - max Holm-adjusted p-value threshold
   - overall mean easy-case-rate threshold
@@ -78,6 +79,7 @@ Single-`n` mode outputs:
 
 Executed successfully in this repo:
 - `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
+- `.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
 - `make smoke`
 - `make smoke-perm`
 - `make scan-smoke`
@@ -130,17 +132,11 @@ Commit only after these checks pass and audit results are reviewed.
 - Cache performance remains workload-dependent; current `s02` matrix shows mixed `on` vs `off` timing with no clear speedup.
 - Scan-stop criterion exists, but default thresholds are user-provided (no auto-selected default policy yet).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
-- Method-audit findings (2026-02-15) identified correctness/robustness follow-ups:
-  - Regression tests for key semantics/guards remain to be added.
 
 ## Immediate Next Tasks
 
-1. Medium priority (verification): add regression tests for
-   - Ising energy evaluation consistency against `dimod` BQM energy on sampled bitstrings,
-   - MIS invalid-lambda rejection behavior,
-   - expected semantics of cumulative success curve.
-2. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
-3. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+1. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
+2. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Method Audit Action List (2026-02-15)
 
@@ -165,6 +161,7 @@ Priority `P1`:
 Priority `P1`:
 - Add focused tests for the above.
   - Acceptance: tests fail before fix and pass after fix for each targeted behavior.
+  - Status: complete (implemented on `main`, see commit history after `b85f94c`).
 
 Reference basis used for the action list:
 - A. Lucas (2014), "Ising formulations of many NP problems" (MIS penalty condition, Eq. 37 / `B < A`): https://arxiv.org/pdf/1302.5843.pdf

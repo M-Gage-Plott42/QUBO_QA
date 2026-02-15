@@ -526,7 +526,9 @@ def ising_energy_from_bitstring(bitstring_lsb0: str, model_eval: IsingModel) -> 
     bitstring_lsb0 is qubit-0 first (LSB-first).
     """
     n = model_eval.n
-    s = np.fromiter((1.0 if ch == "0" else -1.0 for ch in bitstring_lsb0[:n]), dtype=float, count=n)
+    # dimod's to_ising uses x = (s + 1) / 2 for binary variables, so measured bits map as:
+    # bit 0 -> s=-1, bit 1 -> s=+1.
+    s = np.fromiter((-1.0 if ch == "0" else 1.0 for ch in bitstring_lsb0[:n]), dtype=float, count=n)
     e = model_eval.offset + float(np.dot(model_eval.h, s))
     for (i, j, jij) in model_eval.j_terms:
         e += jij * s[i] * s[j]
