@@ -47,6 +47,16 @@ Single-`n` mode outputs:
 - `scan_summary.csv`
 - per-`n` subdirectories (`n_<value>/...`)
 
+## Repository Output Policy
+
+- Scratch outputs are local-only and ignored by git:
+  - `qa_out*/`, `qa_scan*/`, `out/`, and `.mplconfig` cache directories.
+- Provenance runs should use explicit `--outdir` paths under `artifacts/`.
+- Preferred layout:
+  - single-`n`: `artifacts/runs/<YYYY-MM-DD>/<run_tag>/`
+  - `--n-list`: `artifacts/scans/<YYYY-MM-DD>/<run_tag>/`
+- Commit provenance artifacts in separate commits from code changes.
+
 ## Validation (Most Recent Pass)
 
 Executed successfully in this repo:

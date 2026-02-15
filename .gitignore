@@ -14,10 +14,15 @@ build/
 dist/
 *.egg-info/
 
-# Outputs
+# Scratch outputs (local-only)
 qa_out*/
 qa_scan*/
 out/
+**/.mplconfig/
+
+# Provenance policy:
+# Use --outdir artifacts/... for runs intended to be committed.
+# Do not add artifacts/ to ignore rules.
 
 # OS/editor
 .DS_Store

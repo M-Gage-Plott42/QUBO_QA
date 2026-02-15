@@ -100,6 +100,20 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - `qa_scan/n_4/`, `qa_scan/n_5/`, `qa_scan/n_6/` (each with per-`n` results and summary)
 - `qa_scan/scan_summary.csv` (one row per `n`, medians, p-values, Holm-adjusted p-values, Cliff's deltas)
 
+## Output Policy
+
+- Scratch/regression outputs remain local-only:
+  - `qa_out*/`, `qa_scan*/`, and `out/` are git-ignored.
+- Provenance outputs should be written under `artifacts/` and committed when needed.
+- For reproducible provenance, always set an explicit run directory:
+  - single-`n`: `artifacts/runs/<YYYY-MM-DD>/<run_tag>/`
+  - `--n-list`: `artifacts/scans/<YYYY-MM-DD>/<run_tag>/`
+- Recommended provenance files to commit:
+  - `summary.json`
+  - `scan_summary.csv` (for scans)
+  - plots (`convergence_energy.png`, `success_prob.png`, `steps_boxplot.png`, optional `expectation_energy.png`)
+  - `results.csv` when file size is reasonable for the repo.
+
 ## Method Notes
 
 - This is digital adiabatic simulation (Trotterized circuit evolution), not analog hardware quantum annealing.
