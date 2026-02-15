@@ -157,6 +157,9 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
   - `run_finished_utc`
   - `walltime_seconds_total`
   - `walltime_seconds_by_family`
+- `summary.json` includes paper-aligned metrics:
+  - `approximation_ratio` (per-family mean/median at `t_max`, minimization ratio in `[0,1]`)
+  - optional `hardness_proxy` when `--hardness-proxy exact` is enabled
 - Success curves are reported in two variants:
   - cumulative-by-time (`success_prob.png`, computed from best-so-far trajectories),
   - instantaneous-at-time (`success_prob_instantaneous.png`, computed from per-step sampled energies).

@@ -621,6 +621,50 @@ def permutation_test_median_diff_less(
     return (num_less_equal + 1.0) / (iterations + 1.0)
 
 
+def approximation_ratio_minimization(obtained: float, optimal: float, tol: float = 1e-9) -> float:
+    """
+    Approximation ratio in [0, 1] for minimization objectives.
+
+    For a converged instance ratio=1.0; for suboptimal results ratio<1.0.
+    """
+    obt = float(obtained)
+    opt = float(optimal)
+
+    if abs(obt - opt) <= tol or obt < opt:
+        return 1.0
+    if abs(opt) <= tol:
+        return 0.0
+    if opt > 0.0:
+        return max(0.0, min(1.0, opt / obt))
+    return max(0.0, min(1.0, obt / opt))
+
+
+def exact_hardness_proxy_from_sampleset(sampleset: dimod.SampleSet, tol: float = 1e-9) -> float:
+    """
+    Degeneracy-gap hardness proxy from exact enumeration.
+
+    Larger values indicate many highly degenerate competing subspaces
+    and/or a small first energy gap above the optimum.
+    """
+    aggregated = sampleset.aggregate()
+    energies = np.asarray(aggregated.record.energy, dtype=float)
+    counts = np.asarray(aggregated.record.num_occurrences, dtype=float)
+    if energies.size == 0:
+        return 0.0
+
+    order = np.argsort(energies)
+    energies = energies[order]
+    counts = counts[order]
+
+    d_opt = float(max(1.0, counts[0]))
+    if energies.size == 1:
+        return 0.0
+
+    first_gap = float(max(tol, energies[1] - energies[0]))
+    competing_deg = float(np.sum(counts[1:][counts[1:] >= d_opt]))
+    return float(competing_deg / (d_opt * first_gap))
+
+
 def parse_n_list(n_single: Optional[int], n_list: str) -> List[int]:
     if n_list:
         values: List[int] = []
@@ -810,6 +854,8 @@ def run_benchmark_for_n(
         {f: [] for f in families} if bool(args.estimator_diagnostics) else None
     )
     opt_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    approx_ratios_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    hardness_proxy_by_family: Dict[str, List[float]] = {f: [] for f in families}
     steps_to_opt: Dict[str, List[int]] = {f: [] for f in families}
     all_rows: List[InstanceResult] = []
     walltime_seconds_by_family: Dict[str, float] = {}
@@ -872,9 +918,14 @@ def run_benchmark_for_n(
             if args.opt_ref == "exact":
                 exact = dimod.ExactSolver().sample(bqm)
                 opt_energy = float(exact.first.energy)
+                if str(args.hardness_proxy) == "exact":
+                    hardness_proxy_by_family[fam].append(exact_hardness_proxy_from_sampleset(exact))
             else:
                 opt_energy = float(best_so_far[-1])
             opt_energies_by_family[fam].append(opt_energy)
+            approx_ratios_by_family[fam].append(
+                approximation_ratio_minimization(obtained=float(best_so_far[-1]), optimal=opt_energy)
+            )
 
             tol = 1e-9
             hit = np.where(best_so_far <= opt_energy + tol)[0]
@@ -1020,6 +1071,37 @@ def run_benchmark_for_n(
         "maxcut": float(success_instant_maxcut[-1]),
         "mis": float(success_instant_mis[-1]),
     }
+    stats["approximation_ratio"] = {
+        "definition": "minimization ratio in [0,1]; 1.0 means the exact optimum was reached at t_max.",
+        "at_tmax_mean": {
+            "random": float(np.mean(approx_ratios_by_family["random"])),
+            "maxcut": float(np.mean(approx_ratios_by_family["maxcut"])),
+            "mis": float(np.mean(approx_ratios_by_family["mis"])),
+        },
+        "at_tmax_median": {
+            "random": float(np.median(approx_ratios_by_family["random"])),
+            "maxcut": float(np.median(approx_ratios_by_family["maxcut"])),
+            "mis": float(np.median(approx_ratios_by_family["mis"])),
+        },
+    }
+    if str(args.hardness_proxy) == "exact":
+        stats["hardness_proxy"] = {
+            "mode": "exact_degeneracy_gap_proxy",
+            "definition": (
+                "sum competing subspace degeneracies (>= optimum degeneracy) "
+                "divided by optimum degeneracy and first exact energy gap."
+            ),
+            "by_family_mean": {
+                "random": float(np.mean(hardness_proxy_by_family["random"])) if hardness_proxy_by_family["random"] else None,
+                "maxcut": float(np.mean(hardness_proxy_by_family["maxcut"])) if hardness_proxy_by_family["maxcut"] else None,
+                "mis": float(np.mean(hardness_proxy_by_family["mis"])) if hardness_proxy_by_family["mis"] else None,
+            },
+            "by_family_median": {
+                "random": float(np.median(hardness_proxy_by_family["random"])) if hardness_proxy_by_family["random"] else None,
+                "maxcut": float(np.median(hardness_proxy_by_family["maxcut"])) if hardness_proxy_by_family["maxcut"] else None,
+                "mis": float(np.median(hardness_proxy_by_family["mis"])) if hardness_proxy_by_family["mis"] else None,
+            },
+        }
     if exp_random is not None and exp_maxcut is not None and exp_mis is not None:
         stats["estimator_expectation_at_tmax"] = {
             "random": float(exp_random[-1]),
@@ -1276,6 +1358,16 @@ def main() -> None:
         default=None,
         help="Optional precision target passed to EstimatorV2.run.",
     )
+    ap.add_argument(
+        "--hardness-proxy",
+        type=str,
+        default="none",
+        choices=["none", "exact"],
+        help=(
+            "Optional hardness proxy in summary.json. "
+            "'exact' uses exact-solver degeneracy/gap information (requires --opt-ref exact)."
+        ),
+    )
 
     ap.add_argument("--stats-method", type=str, default="mw", choices=["mw", "perm"])
     ap.add_argument("--perm-iterations", type=int, default=10000)
@@ -1341,6 +1433,8 @@ def main() -> None:
             "--mis-lambda must be > 1.0 for the current MIS QUBO formulation "
             "(-sum x_i + lambda * sum x_i x_j)."
         )
+    if str(args.hardness_proxy) == "exact" and str(args.opt_ref) != "exact":
+        raise SystemExit("--hardness-proxy=exact requires --opt-ref exact.")
     if args.stats_method == "perm" and int(args.perm_iterations) <= 0:
         raise SystemExit("--perm-iterations must be positive.")
     if args.estimator_precision is not None and float(args.estimator_precision) <= 0.0:

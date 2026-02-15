@@ -49,6 +49,9 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - Run-level timing metadata in `summary.json` under `run_timing`
   - UTC start/end timestamps
   - total walltime and per-family walltime seconds
+- Paper-aligned summary metrics:
+  - `approximation_ratio` per family at `t_max`
+  - optional `hardness_proxy` via exact-solver degeneracy/gap proxy (`--hardness-proxy exact`)
 
 ## Output Contract
 
