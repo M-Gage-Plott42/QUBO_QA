@@ -126,11 +126,48 @@ Commit only after these checks pass and audit results are reviewed.
 - Cache performance remains workload-dependent; current `s02` matrix shows mixed `on` vs `off` timing with no clear speedup.
 - Scan-stop criterion exists, but default thresholds are user-provided (no auto-selected default policy yet).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
+- Method-audit findings (2026-02-15) identified correctness/robustness follow-ups:
+  - MIS penalty parameter should be constrained to regimes that preserve independent-set semantics.
+  - `success_prob.png` is currently cumulative ("reached by time t"), not instantaneous-at-time.
+  - Some CLI parameter range checks are still missing (`--graph-p`, `--random-density`, and basic bounds coupling checks).
 
 ## Immediate Next Tasks
 
-1. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
-2. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+1. High priority (correctness guard): add CLI validation for MIS penalty regime (`--mis-lambda > 1` for current unweighted MIS formulation) and document rationale.
+2. Medium priority (interpretation clarity): rename or document `success_prob.png` semantics as cumulative success-by-time, and optionally add an instantaneous final-time success curve.
+3. Medium priority (robustness): add explicit CLI range validation for `--graph-p in [0,1]`, `--random-density in [0,1]`, and other basic bounds consistency checks.
+4. Medium priority (verification): add regression tests for
+   - Ising energy evaluation consistency against `dimod` BQM energy on sampled bitstrings,
+   - MIS invalid-lambda rejection behavior,
+   - expected semantics of cumulative success curve.
+5. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
+6. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+
+## Method Audit Action List (2026-02-15)
+
+Priority `P0`:
+- Enforce `--mis-lambda > 1` for current MIS objective form `-sum x_i + lambda * sum x_i x_j`.
+  - Rationale: this preserves independent-set encoding in the standard QUBO construction.
+  - Acceptance: CLI rejects invalid values with a clear error and README documents the bound.
+
+Priority `P1`:
+- Clarify success metric labeling.
+  - Current behavior computes success on `best_so_far` trajectories, so the plot is cumulative by time.
+  - Acceptance: title/legend/docs explicitly say "reached by time t" or a separate instantaneous variant is added.
+
+Priority `P1`:
+- Add missing parameter guardrails.
+  - Validate `--graph-p`, `--random-density` in `[0,1]`.
+  - Acceptance: invalid values fail fast with actionable messages.
+
+Priority `P1`:
+- Add focused tests for the above.
+  - Acceptance: tests fail before fix and pass after fix for each targeted behavior.
+
+Reference basis used for the action list:
+- A. Lucas (2014), "Ising formulations of many NP problems" (MIS penalty condition, Eq. 37 / `B < A`): https://arxiv.org/pdf/1302.5843.pdf
+- Qiskit bit-ordering guide (measurement-string conventions): https://qiskit.qotlabs.org/docs/guides/bit-ordering
+- D-Wave `dimod` BQM docs (Ising/QUBO relationship and conventions): https://docs.dwavequantum.com/en/latest/ocean/api_ref_dimod/bqm.html
 
 ## Quick Commands
 

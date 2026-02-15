@@ -140,12 +140,14 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - This is digital adiabatic simulation (Trotterized circuit evolution), not analog hardware quantum annealing.
 - `--opt-ref exact` uses brute-force exact solving (`dimod.ExactSolver`) and is intended for small `n`.
 - `--opt-ref qa_best` uses the best observed final energy as the reference optimum.
+- MIS penalty note: for the current unweighted MIS QUBO form (`-sum x_i + lambda * sum x_i x_j`), use `--mis-lambda > 1` to preserve standard MIS encoding semantics.
 - Statevector scaling is exponential in `n`.
 - MPS scaling depends on entanglement growth and bond-dimension/truncation settings.
 - For dense random couplings, MPS bond growth can still make large `n` expensive.
 - Transpile cache can be controlled with `--transpile-cache-mode {support,full}` and `--no-transpile-cache`.
 - Low-yield cache runs can auto-disable caching via hit-rate fallback (`--cache-autodisable-*`, `--no-cache-autodisable`).
 - `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
+- `success_prob.png` currently reports cumulative success-by-time ("reached optimum by time `t`"), because it is computed from best-so-far trajectories.
 - Optional `--n-list` early-stop is available when both are provided:
   - `--scan-stop-p-holm-threshold` and `--scan-stop-easy-case-threshold`
   - optional tuning via `--scan-stop-easy-case-op {le,ge}` and `--scan-stop-min-n-evals`
