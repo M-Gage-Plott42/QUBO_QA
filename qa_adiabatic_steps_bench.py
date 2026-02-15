@@ -1274,6 +1274,11 @@ def main() -> None:
         raise SystemExit("--delta-t must be positive.")
     if args.t_max < 0.0:
         raise SystemExit("--t-max must be nonnegative.")
+    if float(args.mis_lambda) <= 1.0:
+        raise SystemExit(
+            "--mis-lambda must be > 1.0 for the current MIS QUBO formulation "
+            "(-sum x_i + lambda * sum x_i x_j)."
+        )
     if args.stats_method == "perm" and int(args.perm_iterations) <= 0:
         raise SystemExit("--perm-iterations must be positive.")
     if args.estimator_precision is not None and float(args.estimator_precision) <= 0.0:
