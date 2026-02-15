@@ -48,6 +48,7 @@ import networkx as nx
 import numpy as np
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
+from qiskit_aer.primitives import SamplerV2
 
 try:
     from scipy.stats import mannwhitneyu
@@ -338,6 +339,16 @@ def best_energy_from_counts(counts: Dict[str, int], model_eval: IsingModel) -> T
     return best_e, best_b
 
 
+def counts_from_sampler_pub(pub_result: Any) -> Dict[str, int]:
+    """
+    Extract counts from a SamplerV2 pub result without assuming classical-register name.
+    """
+    for value in pub_result.data.values():
+        if hasattr(value, "get_counts"):
+            return value.get_counts()
+    raise RuntimeError("SamplerV2 result did not contain a classical register with counts.")
+
+
 def cliffs_delta_smaller_is_better(x: np.ndarray, y: np.ndarray) -> float:
     """
     Cliff's delta for "smaller is better":
@@ -491,13 +502,14 @@ def run_instance_sweep(
         seed_transpiler=seed,
         num_processes=1,
     )
-    job = backend.run(tqc, shots=shots, seed_simulator=seed)
+    sampler = SamplerV2.from_backend(backend, seed=seed)
+    job = sampler.run(tqc, shots=shots)
     result = job.result()
 
     energies = np.zeros(k_max + 1, dtype=float)
     best_bits: List[str] = []
     for idx in range(k_max + 1):
-        counts = result.get_counts(idx)
+        counts = counts_from_sampler_pub(result[idx])
         e, b = best_energy_from_counts(counts, model_eval)
         energies[idx] = e
         best_bits.append(b)

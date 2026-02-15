@@ -15,6 +15,7 @@ The simulator uses Qiskit Aer with:
 - Convergence metric `steps_to_opt` (first `K` where best-so-far reaches reference energy)
 - Three benchmark families: Random / MaxCut / MIS
 - Success-probability curves vs time (`success_prob.png`)
+- Modern Qiskit Aer primitives path for sampling (`SamplerV2.from_backend`)
 - Graph relabeling (BFS from highest-degree node) for MaxCut/MIS to improve linear edge locality for MPS
 - Statistical testing modes:
   - `--stats-method mw` (one-sided Mann-Whitney U, random < comparator)
@@ -108,10 +109,10 @@ Validated against `M-Gage-Plott42/qiskit-v2-guide` (Qiskit 2.3.x patterns):
   - Qiskit counts are treated as MSB-first classical strings,
   - keys are reversed to qubit-0-first before Ising energy evaluation.
 - Aer backend usage remains valid for Qiskit 2.x:
-  - `AerSimulator` construction and `transpile(..., num_processes=1)` usage are working,
+  - execution now uses `SamplerV2.from_backend(AerSimulator(...))` on transpiled circuits,
   - MPS options used by this script are recognized by Aer (`qiskit-aer 0.17.2`),
   - auto-switch to MPS at `n >= --mps-auto-threshold` is functioning.
-- No CLI or output-contract changes were required from this audit.
+- CLI and output contracts remain unchanged after this modernization.
 
 ## Makefile Shortcuts
 
