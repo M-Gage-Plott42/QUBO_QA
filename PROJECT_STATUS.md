@@ -104,6 +104,25 @@ Executed successfully in this repo:
   - No consistent speedup from transpile cache in this tested range.
   - Cache benchmarking is deprioritized for now.
 
+## Scan-Stop Threshold Tuning Snapshot (2026-02-15)
+
+- Baseline scan (no scan-stop):
+  - `diagnostics_local/2026-02-15/scan_stop_tune_baseline/scan_summary.csv`
+- Aggressive preset audit:
+  - `--scan-stop-p-holm-threshold 0.9`
+  - `--scan-stop-easy-case-threshold 0.9`
+  - `--scan-stop-easy-case-op ge`
+  - `--scan-stop-min-n-evals 2`
+  - Result: early-stop triggered at `n=5` in
+    `diagnostics_local/2026-02-15/scan_stop_tune_aggressive/scan_summary.csv`
+- Conservative preset audit:
+  - `--scan-stop-p-holm-threshold 0.95`
+  - `--scan-stop-easy-case-threshold 0.7`
+  - `--scan-stop-easy-case-op ge`
+  - `--scan-stop-min-n-evals 3`
+  - Result: early-stop triggered at `n=6` in
+    `diagnostics_local/2026-02-15/scan_stop_tune_conservative_trigger/scan_summary.csv`
+
 ## Workstation Handoff Checklist
 
 On a new workstation/clone, run:
@@ -130,13 +149,12 @@ Commit only after these checks pass and audit results are reviewed.
 ## Open Risks / Gaps
 
 - Cache performance remains workload-dependent; current `s02` matrix shows mixed `on` vs `off` timing with no clear speedup.
-- Scan-stop criterion exists, but default thresholds are user-provided (no auto-selected default policy yet).
+- Scan-stop criterion has recommended presets, but defaults are still user-provided (no auto-selected policy).
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
 
 ## Immediate Next Tasks
 
-1. Optional/low priority: tune and document recommended scan-stop thresholds for common workloads.
-2. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
+1. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Method Audit Action List (2026-02-15)
 

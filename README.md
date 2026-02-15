@@ -159,6 +159,11 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
   - `--scan-stop-p-holm-threshold` and `--scan-stop-easy-case-threshold`
   - optional tuning via `--scan-stop-easy-case-op {le,ge}` and `--scan-stop-min-n-evals`
   - when triggered, scanning stops early and `scan_summary.csv` records trigger metadata.
+- Recommended starting presets (tuned on quick statevector scans, 2026-02-15):
+  - Aggressive early-stop:
+    - `--scan-stop-p-holm-threshold 0.9 --scan-stop-easy-case-threshold 0.9 --scan-stop-easy-case-op ge --scan-stop-min-n-evals 2`
+  - Conservative early-stop:
+    - `--scan-stop-p-holm-threshold 0.95 --scan-stop-easy-case-threshold 0.7 --scan-stop-easy-case-op ge --scan-stop-min-n-evals 3`
 
 ## Patch Compliance Policy
 
