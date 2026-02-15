@@ -72,6 +72,24 @@ Executed successfully in this repo:
 - `make scan-smoke`
 - Estimator diagnostics smoke:
   - `.venv/bin/python qa_adiabatic_steps_bench.py -n 4 --instances 2 --t-max 1 --shots 16 --aer-method statevector --opt-ref exact --estimator-diagnostics --outdir /tmp/qa_estimator_diag`
+- Cache benchmark matrix restart (for cache on/off characterization):
+  - `OMP_NUM_THREADS=11` run set under `diagnostics_local/2026-02-15/cache_bench_s02/` with per-run logs and `timing.csv`
+
+## Cache Benchmark Snapshot (2026-02-15)
+
+- Bench roots:
+  - `diagnostics_local/2026-02-15/cache_bench_s01/` (partial run under 1-core contention)
+  - `diagnostics_local/2026-02-15/cache_bench_s02/` (full restart with `OMP_NUM_THREADS=11`)
+- `s02` matrix:
+  - `n in {6,10}`, `instances in {10,25}`, cache `on/off`, `--aer-method statevector --opt-ref exact --no-plots`
+- Timing summary (`diagnostics_local/2026-02-15/cache_bench_s02/timing.csv`):
+  - `n6_i10`: on `9.42s`, off `8.00s`
+  - `n6_i25`: on `18.90s`, off `19.35s`
+  - `n10_i10`: on `16.26s`, off `14.60s`
+  - `n10_i25`: on `37.39s`, off `36.97s`
+- Outcome:
+  - No consistent speedup from transpile cache in this tested range.
+  - Cache benchmarking is deprioritized for now.
 
 ## Workstation Handoff Checklist
 
@@ -98,15 +116,15 @@ Commit only after these checks pass and audit results are reviewed.
 
 ## Open Risks / Gaps
 
-- Runtime/perf characterization for transpile-template cache (`on` vs `off`) is not yet benchmarked and documented.
+- Cache performance remains workload-dependent; current `s02` matrix shows mixed `on` vs `off` timing with no clear speedup.
 - No auto-stop/easy-case threshold logic in `--n-list` scans yet.
 - MPS scalability remains entanglement-dependent for dense couplings (expected limitation).
 
 ## Immediate Next Tasks
 
-1. Run a controlled performance benchmark comparing cache enabled/disabled across representative `n` and instance counts.
-2. Add an optional "easy-case rate" metric and include it in `summary.json` and `scan_summary.csv`.
-3. Add an optional scan stopping criterion based on adjusted p-value and easy-case-rate threshold.
+1. Add an optional "easy-case rate" metric and include it in `summary.json` and `scan_summary.csv`.
+2. Add an optional scan stopping criterion based on adjusted p-value and easy-case-rate threshold.
+3. Optional/low priority: revisit cache benchmarks only if larger-`n` runs make transpile cost dominant.
 
 ## Quick Commands
 
