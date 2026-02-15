@@ -106,7 +106,7 @@ Enable estimator diagnostics (writes `expectation_energy.png`):
 Default output directory: `qa_out/`
 
 - `results.csv` (per-instance metrics)
-- `summary.json` (aggregate metrics + test results, including `easy_case` rates)
+- `summary.json` (aggregate metrics + test results, including `easy_case` rates and `run_timing`)
 - `convergence_energy.png` (median best-so-far energy vs time)
 - `success_prob.png` (cumulative success probability vs time, "reached by time `t`")
 - `success_prob_instantaneous.png` (instantaneous success probability at time `t`)
@@ -152,6 +152,11 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 - Transpile cache can be controlled with `--transpile-cache-mode {support,full}` and `--no-transpile-cache`.
 - Low-yield cache runs can auto-disable caching via hit-rate fallback (`--cache-autodisable-*`, `--no-cache-autodisable`).
 - `--estimator-diagnostics` enables EstimatorV2 expectation-value tracking and adds estimator keys to `summary.json`.
+- `summary.json` includes run timing metadata under `run_timing`:
+  - `run_started_utc`
+  - `run_finished_utc`
+  - `walltime_seconds_total`
+  - `walltime_seconds_by_family`
 - Success curves are reported in two variants:
   - cumulative-by-time (`success_prob.png`, computed from best-so-far trajectories),
   - instantaneous-at-time (`success_prob_instantaneous.png`, computed from per-step sampled energies).

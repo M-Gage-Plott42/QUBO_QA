@@ -46,6 +46,9 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - Optional Estimator diagnostics via `--estimator-diagnostics` and `--estimator-precision`
   - Writes `expectation_energy.png`
   - Adds estimator diagnostics keys to `summary.json`
+- Run-level timing metadata in `summary.json` under `run_timing`
+  - UTC start/end timestamps
+  - total walltime and per-family walltime seconds
 
 ## Output Contract
 

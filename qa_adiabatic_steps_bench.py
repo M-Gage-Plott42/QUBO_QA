@@ -39,8 +39,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
 import json
 import os
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -767,6 +769,9 @@ def run_benchmark_for_n(
     outdir: str,
     seed_base: int,
 ) -> Dict[str, Any]:
+    run_started_utc = datetime.now(timezone.utc).isoformat()
+    run_started_wall = time.perf_counter()
+
     if args.opt_ref == "exact" and n > int(args.exact_max_n):
         raise SystemExit(
             f"--opt-ref=exact requested but n={n} > exact-max-n={args.exact_max_n}. "
@@ -807,8 +812,10 @@ def run_benchmark_for_n(
     opt_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
     steps_to_opt: Dict[str, List[int]] = {f: [] for f in families}
     all_rows: List[InstanceResult] = []
+    walltime_seconds_by_family: Dict[str, float] = {}
 
     for fam_idx, fam in enumerate(families):
+        family_started_wall = time.perf_counter()
         print(f"\n=== n={n} Family: {fam} ===")
         for inst_id in range(int(args.instances)):
             if fam == "random":
@@ -909,6 +916,10 @@ def run_benchmark_for_n(
 
             if (inst_id + 1) % max(1, (int(args.instances) // 10)) == 0:
                 print(f"  instance {inst_id + 1}/{args.instances} done")
+        walltime_seconds_by_family[fam] = float(time.perf_counter() - family_started_wall)
+
+    run_finished_utc = datetime.now(timezone.utc).isoformat()
+    walltime_seconds_total = float(time.perf_counter() - run_started_wall)
 
     def agg_curve(curves: List[np.ndarray], agg: str = "median") -> np.ndarray:
         m = np.vstack(curves)
@@ -972,6 +983,12 @@ def run_benchmark_for_n(
         "estimator_diagnostics": {
             "enabled": bool(args.estimator_diagnostics),
             "precision": args.estimator_precision,
+        },
+        "run_timing": {
+            "run_started_utc": run_started_utc,
+            "run_finished_utc": run_finished_utc,
+            "walltime_seconds_total": walltime_seconds_total,
+            "walltime_seconds_by_family": walltime_seconds_by_family,
         },
     }
 
