@@ -14,6 +14,7 @@ benchmark in qa_adiabatic_steps_bench.py unchanged.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import time
@@ -28,6 +29,7 @@ from qa_adiabatic_steps_bench import (
     approximation_ratio_minimization,
     bqm_to_ising_arrays,
     ising_energy_from_bitstring,
+    make_random_qubo_bqm,
     make_maxcut_qubo_bqm,
     make_mis_qubo_bqm,
 )
@@ -167,6 +169,7 @@ def optimize_local_detuning_schedule(
         return e
 
     t0 = time.perf_counter()
+    eval_start_stage1 = int(len(eval_history))
     stage1 = minimize(
         objective,
         x0=x0,
@@ -174,14 +177,18 @@ def optimize_local_detuning_schedule(
         bounds=bounds,
         options={"maxiter": int(maxiter_bfgs)},
     )
+    eval_end_stage1 = int(len(eval_history))
     t1 = time.perf_counter()
+    eval_start_stage2 = int(len(eval_history))
     stage2 = minimize(
         objective,
         x0=stage1.x,
         method="Nelder-Mead",
         options={"maxiter": int(maxiter_nm), "xatol": 1e-4, "fatol": 1e-4},
     )
+    eval_end_stage2 = int(len(eval_history))
     t2 = time.perf_counter()
+    eval_start_stage3 = int(len(eval_history))
     stage3 = minimize(
         objective,
         x0=stage2.x,
@@ -189,6 +196,7 @@ def optimize_local_detuning_schedule(
         bounds=bounds,
         options={"maxiter": int(maxiter_bfgs)},
     )
+    eval_end_stage3 = int(len(eval_history))
     t3 = time.perf_counter()
 
     omega_opt, g_opt = unpack(stage3.x)
@@ -209,6 +217,11 @@ def optimize_local_detuning_schedule(
         "psi_final": psi_final,
         "objective_final": e_final,
         "eval_history": eval_history,
+        "stage_eval_ranges": {
+            "stage1": {"start": eval_start_stage1, "end": eval_end_stage1},
+            "stage2": {"start": eval_start_stage2, "end": eval_end_stage2},
+            "stage3": {"start": eval_start_stage3, "end": eval_end_stage3},
+        },
         "stage": {
             "stage1": {
                 "success": bool(stage1.success),
@@ -236,13 +249,218 @@ def optimize_local_detuning_schedule(
     }
 
 
+def protocol_mode_for_problem(problem: str) -> str:
+    if str(problem) in {"maxcut", "mis"}:
+        return "paper_aligned"
+    return "exploratory_generalized"
+
+
+def _stage_label_curve(num_points: int, stage_eval_ranges: Dict[str, Dict[str, int]]) -> List[str]:
+    labels = ["unknown"] * int(num_points)
+    for stage_name in ("stage1", "stage2", "stage3"):
+        section = stage_eval_ranges.get(stage_name, {})
+        start = int(section.get("start", 0))
+        end = int(section.get("end", 0))
+        for idx in range(max(0, start), min(int(num_points), end)):
+            labels[idx] = stage_name
+    return labels
+
+
+def build_prr_objective_trace(
+    eval_history: List[float],
+    stage_eval_ranges: Dict[str, Dict[str, int]],
+) -> Dict[str, List[Any]]:
+    n = int(len(eval_history))
+    if n <= 0:
+        return {
+            "eval_index": [],
+            "budget_fraction": [],
+            "objective_energy": [],
+            "best_objective_so_far": [],
+            "stage": [],
+        }
+
+    objective = np.asarray(eval_history, dtype=float)
+    best_so_far = np.minimum.accumulate(objective)
+    budget = (np.arange(n, dtype=float) + 1.0) / float(n)
+    stage_labels = _stage_label_curve(num_points=n, stage_eval_ranges=stage_eval_ranges)
+    return {
+        "eval_index": [int(v) for v in np.arange(n, dtype=int)],
+        "budget_fraction": [float(v) for v in budget],
+        "objective_energy": [float(v) for v in objective],
+        "best_objective_so_far": [float(v) for v in best_so_far],
+        "stage": stage_labels,
+    }
+
+
+def make_problem_bqm(
+    *,
+    problem: str,
+    rng: np.random.Generator,
+    n: int,
+    graph_p: float,
+    random_low: int,
+    random_high: int,
+    random_density: float,
+    maxcut_weight_low: int,
+    maxcut_weight_high: int,
+    mis_node_weight_low: int,
+    mis_node_weight_high: int,
+    mis_lambda: float,
+) -> Tuple[dimod.BinaryQuadraticModel, Dict[str, Any]]:
+    if str(problem) == "maxcut":
+        return make_maxcut_qubo_bqm(
+            rng=rng,
+            n=n,
+            p=float(graph_p),
+            weight_low=int(maxcut_weight_low),
+            weight_high=int(maxcut_weight_high),
+        )
+    if str(problem) == "mis":
+        return make_mis_qubo_bqm(
+            rng=rng,
+            n=n,
+            p=float(graph_p),
+            penalty_lambda=float(mis_lambda),
+            node_weight_low=int(mis_node_weight_low),
+            node_weight_high=int(mis_node_weight_high),
+        )
+    if str(problem) == "random":
+        return make_random_qubo_bqm(
+            rng=rng,
+            n=n,
+            low=int(random_low),
+            high=int(random_high),
+            density=float(random_density),
+        )
+    raise ValueError(f"Unsupported problem: {problem}")
+
+
+def run_prr_local_detuning_for_bqm(
+    *,
+    bqm: dimod.BinaryQuadraticModel,
+    problem: str,
+    meta: Dict[str, Any],
+    n: int,
+    graph_p: float,
+    seed: int,
+    total_time: float,
+    segments: int,
+    omega_max: float,
+    g_min: float,
+    g_max: float,
+    g_start: float,
+    maxiter_bfgs: int,
+    maxiter_nm: int,
+    exact_max_n: int,
+) -> Dict[str, Any]:
+    model = bqm_to_ising_arrays(bqm, n=n)
+    h_driver, h_linear, h_quadratic = build_hamiltonians(
+        n=n,
+        h=model.h,
+        j_terms=model.j_terms,
+        offset=model.offset,
+    )
+    target_hamiltonian = h_linear + h_quadratic
+
+    opt_result = optimize_local_detuning_schedule(
+        h_driver=h_driver,
+        h_linear=h_linear,
+        h_quadratic=h_quadratic,
+        target_hamiltonian=target_hamiltonian,
+        n=n,
+        total_time=float(total_time),
+        segments=int(segments),
+        omega_max=float(omega_max),
+        g_min=float(g_min),
+        g_max=float(g_max),
+        g_start=float(g_start),
+        maxiter_bfgs=int(maxiter_bfgs),
+        maxiter_nm=int(maxiter_nm),
+    )
+
+    psi_final = opt_result["psi_final"]
+    probs = np.abs(psi_final) ** 2
+    top_idx = int(np.argmax(probs))
+    top_bitstring_lsb0 = basis_index_to_bitstring_lsb0(top_idx, n=n)
+    sampled_best_energy = ising_energy_from_bitstring(top_bitstring_lsb0, model)
+    expectation_energy_final = float(opt_result["objective_final"])
+
+    exact_opt_energy: float | None = None
+    approx_ratio: float | None = None
+    opt_subspace_probability: float | None = None
+    if n <= int(exact_max_n):
+        exact = dimod.ExactSolver().sample(bqm)
+        exact_opt_energy = float(exact.first.energy)
+        approx_ratio = approximation_ratio_minimization(
+            obtained=sampled_best_energy,
+            optimal=exact_opt_energy,
+        )
+        opt_prob = 0.0
+        lowest = exact.lowest(atol=1e-9, rtol=0.0)
+        for rec in lowest.data(fields=["sample"]):
+            sample = rec.sample
+            bits_msb = "".join("1" if int(sample[i]) == 1 else "0" for i in range(n))
+            opt_prob += float(probs[int(bits_msb, 2)])
+        opt_subspace_probability = float(opt_prob)
+
+    objective_trace = build_prr_objective_trace(
+        eval_history=opt_result["eval_history"],
+        stage_eval_ranges=opt_result["stage_eval_ranges"],
+    )
+    mode = protocol_mode_for_problem(problem)
+    summary: Dict[str, Any] = {
+        "problem": str(problem),
+        "protocol_mode": mode,
+        "mode_note": (
+            "paper-aligned family (PRR-style MaxCut/MIS local-detuning protocol)."
+            if mode == "paper_aligned"
+            else "exploratory extension beyond PRR paper scope."
+        ),
+        "n": int(n),
+        "graph_p": float(graph_p),
+        "seed": int(seed),
+        "segments": int(segments),
+        "total_time": float(total_time),
+        "omega_max": float(omega_max),
+        "g_min": float(g_min),
+        "g_max": float(g_max),
+        "g_start": float(g_start),
+        "meta": meta,
+        "sampled_best_bitstring_lsb0": top_bitstring_lsb0,
+        "sampled_best_energy": float(sampled_best_energy),
+        "expectation_energy_final": float(expectation_energy_final),
+        "exact_opt_energy": exact_opt_energy,
+        "approximation_ratio_vs_exact": approx_ratio,
+        "opt_subspace_probability": opt_subspace_probability,
+        "schedule": {
+            "omega": [float(v) for v in opt_result["omega_opt"]],
+            "detuning_scale_g": [float(v) for v in opt_result["g_opt"]],
+        },
+        "optimization": {
+            "stage": opt_result["stage"],
+            "stage_eval_ranges": opt_result["stage_eval_ranges"],
+            "num_objective_evals": int(len(opt_result["eval_history"])),
+            "best_objective_seen": float(min(opt_result["eval_history"])) if opt_result["eval_history"] else None,
+            "trace_budget_fraction": objective_trace["budget_fraction"],
+            "trace_objective_energy": objective_trace["objective_energy"],
+            "trace_best_objective_so_far": objective_trace["best_objective_so_far"],
+            "trace_stage": objective_trace["stage"],
+        },
+    }
+    return summary
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--problem", type=str, required=True, choices=["maxcut", "mis"])
+    ap.add_argument("--problem", type=str, required=True, choices=["random", "maxcut", "mis"])
     ap.add_argument("-n", "--n", type=int, required=True)
     ap.add_argument("--graph-p", type=float, default=0.3)
     ap.add_argument("--seed", type=int, default=0)
 
+    ap.add_argument("--random-low", type=int, default=-5)
+    ap.add_argument("--random-high", type=int, default=5)
+    ap.add_argument("--random-density", type=float, default=1.0)
     ap.add_argument("--maxcut-weight-low", type=int, default=1)
     ap.add_argument("--maxcut-weight-high", type=int, default=5)
     ap.add_argument("--mis-node-weight-low", type=int, default=1)
@@ -276,6 +494,10 @@ def main() -> None:
         raise SystemExit("--g-min must be < --g-max.")
     if int(args.maxiter_bfgs) <= 0 or int(args.maxiter_nm) <= 0:
         raise SystemExit("--maxiter-bfgs and --maxiter-nm must be positive.")
+    if int(args.random_low) > int(args.random_high):
+        raise SystemExit("--random-low must be <= --random-high.")
+    if not (0.0 <= float(args.random_density) <= 1.0):
+        raise SystemExit("--random-density must be in [0, 1].")
     if int(args.maxcut_weight_low) > int(args.maxcut_weight_high):
         raise SystemExit("--maxcut-weight-low must be <= --maxcut-weight-high.")
     if int(args.mis_node_weight_low) > int(args.mis_node_weight_high):
@@ -286,39 +508,28 @@ def main() -> None:
     rng = np.random.default_rng(int(args.seed))
     n = int(args.n)
 
-    if str(args.problem) == "maxcut":
-        bqm, meta = make_maxcut_qubo_bqm(
-            rng=rng,
-            n=n,
-            p=float(args.graph_p),
-            weight_low=int(args.maxcut_weight_low),
-            weight_high=int(args.maxcut_weight_high),
-        )
-    else:
-        bqm, meta = make_mis_qubo_bqm(
-            rng=rng,
-            n=n,
-            p=float(args.graph_p),
-            penalty_lambda=float(args.mis_lambda),
-            node_weight_low=int(args.mis_node_weight_low),
-            node_weight_high=int(args.mis_node_weight_high),
-        )
-
-    model = bqm_to_ising_arrays(bqm, n=n)
-    h_driver, h_linear, h_quadratic = build_hamiltonians(
+    bqm, meta = make_problem_bqm(
+        problem=str(args.problem),
+        rng=rng,
         n=n,
-        h=model.h,
-        j_terms=model.j_terms,
-        offset=model.offset,
+        graph_p=float(args.graph_p),
+        random_low=int(args.random_low),
+        random_high=int(args.random_high),
+        random_density=float(args.random_density),
+        maxcut_weight_low=int(args.maxcut_weight_low),
+        maxcut_weight_high=int(args.maxcut_weight_high),
+        mis_node_weight_low=int(args.mis_node_weight_low),
+        mis_node_weight_high=int(args.mis_node_weight_high),
+        mis_lambda=float(args.mis_lambda),
     )
-    target_hamiltonian = h_linear + h_quadratic
 
-    opt_result = optimize_local_detuning_schedule(
-        h_driver=h_driver,
-        h_linear=h_linear,
-        h_quadratic=h_quadratic,
-        target_hamiltonian=target_hamiltonian,
+    summary = run_prr_local_detuning_for_bqm(
+        bqm=bqm,
+        problem=str(args.problem),
+        meta=meta,
         n=n,
+        graph_p=float(args.graph_p),
+        seed=int(args.seed),
         total_time=float(args.total_time),
         segments=int(args.segments),
         omega_max=float(args.omega_max),
@@ -327,67 +538,32 @@ def main() -> None:
         g_start=float(args.g_start),
         maxiter_bfgs=int(args.maxiter_bfgs),
         maxiter_nm=int(args.maxiter_nm),
+        exact_max_n=int(args.exact_max_n),
     )
 
-    psi_final = opt_result["psi_final"]
-    probs = np.abs(psi_final) ** 2
-    top_idx = int(np.argmax(probs))
-    top_bitstring_lsb0 = basis_index_to_bitstring_lsb0(top_idx, n=n)
-    sampled_best_energy = ising_energy_from_bitstring(top_bitstring_lsb0, model)
-    expectation_energy_final = float(opt_result["objective_final"])
-
-    exact_opt_energy: float | None = None
-    approx_ratio: float | None = None
-    opt_subspace_probability: float | None = None
-    if n <= int(args.exact_max_n):
-        exact = dimod.ExactSolver().sample(bqm)
-        exact_opt_energy = float(exact.first.energy)
-        approx_ratio = approximation_ratio_minimization(
-            obtained=sampled_best_energy,
-            optimal=exact_opt_energy,
-        )
-        opt_prob = 0.0
-        lowest = exact.lowest(atol=1e-9, rtol=0.0)
-        for rec in lowest.data(fields=["sample"]):
-            sample = rec.sample
-            bits_msb = "".join("1" if int(sample[i]) == 1 else "0" for i in range(n))
-            opt_prob += float(probs[int(bits_msb, 2)])
-        opt_subspace_probability = float(opt_prob)
-
     os.makedirs(args.outdir, exist_ok=True)
-    summary = {
-        "problem": str(args.problem),
-        "n": int(n),
-        "graph_p": float(args.graph_p),
-        "seed": int(args.seed),
-        "segments": int(args.segments),
-        "total_time": float(args.total_time),
-        "omega_max": float(args.omega_max),
-        "g_min": float(args.g_min),
-        "g_max": float(args.g_max),
-        "g_start": float(args.g_start),
-        "meta": meta,
-        "sampled_best_bitstring_lsb0": top_bitstring_lsb0,
-        "sampled_best_energy": float(sampled_best_energy),
-        "expectation_energy_final": float(expectation_energy_final),
-        "exact_opt_energy": exact_opt_energy,
-        "approximation_ratio_vs_exact": approx_ratio,
-        "opt_subspace_probability": opt_subspace_probability,
-        "schedule": {
-            "omega": [float(v) for v in opt_result["omega_opt"]],
-            "detuning_scale_g": [float(v) for v in opt_result["g_opt"]],
-        },
-        "optimization": {
-            "stage": opt_result["stage"],
-            "num_objective_evals": int(len(opt_result["eval_history"])),
-            "best_objective_seen": float(min(opt_result["eval_history"])) if opt_result["eval_history"] else None,
-        },
-    }
 
     summary_path = os.path.join(args.outdir, "summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
     print(f"Wrote: {summary_path}")
+
+    trace_path = os.path.join(args.outdir, "optimization_trace.csv")
+    with open(trace_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["eval_index", "budget_fraction", "objective_energy", "best_objective_so_far", "stage"])
+        opt = summary["optimization"]
+        for idx in range(int(opt["num_objective_evals"])):
+            w.writerow(
+                [
+                    int(idx),
+                    float(opt["trace_budget_fraction"][idx]),
+                    float(opt["trace_objective_energy"][idx]),
+                    float(opt["trace_best_objective_so_far"][idx]),
+                    str(opt["trace_stage"][idx]),
+                ]
+            )
+    print(f"Wrote: {trace_path}")
 
 
 if __name__ == "__main__":
