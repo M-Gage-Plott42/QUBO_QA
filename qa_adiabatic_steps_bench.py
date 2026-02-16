@@ -1440,6 +1440,78 @@ def run_benchmark_for_n(
     plt.close()
     print(f"Wrote: {out_plot2}")
 
+    if bool(args.plot_histograms):
+        qa_final_random = np.asarray(qa_final_energies_by_family["random"], dtype=float)
+        qa_final_maxcut = np.asarray(qa_final_energies_by_family["maxcut"], dtype=float)
+        qa_final_mis = np.asarray(qa_final_energies_by_family["mis"], dtype=float)
+        opt_final_random = np.asarray(opt_energies_by_family["random"], dtype=float)
+        opt_final_maxcut = np.asarray(opt_energies_by_family["maxcut"], dtype=float)
+        opt_final_mis = np.asarray(opt_energies_by_family["mis"], dtype=float)
+        ratio_random = np.asarray(approx_ratios_by_family["random"], dtype=float)
+        ratio_maxcut = np.asarray(approx_ratios_by_family["maxcut"], dtype=float)
+        ratio_mis = np.asarray(approx_ratios_by_family["mis"], dtype=float)
+
+        fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.0), squeeze=False)
+        axes = axes[0]
+        family_data = [
+            ("Random", qa_final_random),
+            ("MaxCut", qa_final_maxcut),
+            ("MIS", qa_final_mis),
+        ]
+        for ax, (label, vals) in zip(axes, family_data):
+            ax.hist(vals, bins=12, alpha=0.8, color="#1f77b4")
+            ax.set_title(label)
+            ax.set_xlabel("final best-so-far energy")
+            ax.set_ylabel("count")
+            ax.grid(alpha=0.2)
+        fig.suptitle(f"Final energy distribution by family (n={n}, N={args.instances})")
+        fig.tight_layout()
+        out_hist_final = os.path.join(outdir, "hist_final_energy.png")
+        fig.savefig(out_hist_final, dpi=200)
+        plt.close(fig)
+        print(f"Wrote: {out_hist_final}")
+
+        fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.0), squeeze=False)
+        axes = axes[0]
+        gap_data = [
+            ("Random", qa_final_random - opt_final_random),
+            ("MaxCut", qa_final_maxcut - opt_final_maxcut),
+            ("MIS", qa_final_mis - opt_final_mis),
+        ]
+        for ax, (label, vals) in zip(axes, gap_data):
+            ax.hist(vals, bins=12, alpha=0.8, color="#ff7f0e")
+            ax.set_title(label)
+            ax.set_xlabel("final gap to opt")
+            ax.set_ylabel("count")
+            ax.grid(alpha=0.2)
+        fig.suptitle(f"Final gap distribution by family (n={n}, N={args.instances})")
+        fig.tight_layout()
+        out_hist_gap = os.path.join(outdir, "hist_final_gap_to_opt.png")
+        fig.savefig(out_hist_gap, dpi=200)
+        plt.close(fig)
+        print(f"Wrote: {out_hist_gap}")
+
+        fig, axes = plt.subplots(1, 3, figsize=(14.0, 4.0), squeeze=False)
+        axes = axes[0]
+        ratio_data = [
+            ("Random", ratio_random),
+            ("MaxCut", ratio_maxcut),
+            ("MIS", ratio_mis),
+        ]
+        for ax, (label, vals) in zip(axes, ratio_data):
+            ax.hist(vals, bins=12, alpha=0.8, color="#2ca02c")
+            ax.set_title(label)
+            ax.set_xlabel("approximation ratio R")
+            ax.set_ylabel("count")
+            ax.set_xlim(0.0, 1.0)
+            ax.grid(alpha=0.2)
+        fig.suptitle(f"Approximation-ratio distribution by family (n={n}, N={args.instances})")
+        fig.tight_layout()
+        out_hist_ratio = os.path.join(outdir, "hist_approx_ratio.png")
+        fig.savefig(out_hist_ratio, dpi=200)
+        plt.close(fig)
+        print(f"Wrote: {out_hist_ratio}")
+
     return stats
 
 
@@ -1597,6 +1669,11 @@ def main() -> None:
 
     ap.add_argument("--outdir", type=str, default="qa_out")
     ap.add_argument("--no-plots", action="store_true")
+    ap.add_argument(
+        "--plot-histograms",
+        action="store_true",
+        help="Write optional histogram plots for final energies, gaps, and approximation ratios.",
+    )
     args = ap.parse_args()
 
     if args.instances <= 0:
