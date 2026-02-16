@@ -45,7 +45,7 @@ import os
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import dimod
 import networkx as nx
@@ -60,6 +60,11 @@ try:
     from scipy.stats import mannwhitneyu
 except Exception:  # pragma: no cover
     mannwhitneyu = None
+
+try:
+    import neal
+except Exception:  # pragma: no cover
+    neal = None
 
 
 def _rand_symmetric_int_matrix(
@@ -675,23 +680,91 @@ def run_sa_baseline(
     num_reads: int,
     num_sweeps: int,
     seed: int,
-) -> Tuple[float, float]:
+) -> Tuple[float, float, str]:
     """
     Classical simulated-annealing baseline for side-by-side comparisons.
 
     Returns:
-      (best_energy, walltime_seconds)
+      (best_energy, walltime_seconds, engine_name)
     """
-    sampler = dimod.reference.samplers.SimulatedAnnealingSampler()
+    if neal is not None:
+        sampler = neal.SimulatedAnnealingSampler()
+        engine_name = "neal"
+    else:
+        sampler = dimod.reference.samplers.SimulatedAnnealingSampler()
+        engine_name = "dimod_reference"
     start = time.perf_counter()
-    np_state = np.random.get_state()
     try:
-        np.random.seed(int(seed) % (2**32))
-        sampleset = sampler.sample(bqm, num_reads=int(num_reads), num_sweeps=int(num_sweeps))
-    finally:
-        np.random.set_state(np_state)
+        sampleset = sampler.sample(bqm, num_reads=int(num_reads), num_sweeps=int(num_sweeps), seed=int(seed))
+    except TypeError:
+        np_state = np.random.get_state()
+        try:
+            np.random.seed(int(seed) % (2**32))
+            sampleset = sampler.sample(bqm, num_reads=int(num_reads), num_sweeps=int(num_sweeps))
+        finally:
+            np.random.set_state(np_state)
     elapsed = float(time.perf_counter() - start)
-    return float(sampleset.first.energy), elapsed
+    return float(sampleset.first.energy), elapsed, engine_name
+
+
+def run_sa_convergence_trace(
+    bqm: dimod.BinaryQuadraticModel,
+    num_reads: int,
+    sweep_checkpoints: Sequence[int],
+    seed: int,
+) -> Tuple[np.ndarray, np.ndarray, str]:
+    """
+    SA convergence trace over sweep checkpoints.
+
+    Returns:
+      best_energy_so_far_by_checkpoint,
+      cumulative_runtime_seconds_by_checkpoint,
+      engine_name
+    """
+    checkpoints = [int(v) for v in sweep_checkpoints if int(v) > 0]
+    if not checkpoints:
+        raise ValueError("sweep_checkpoints must contain at least one positive integer.")
+
+    if neal is not None:
+        sampler = neal.SimulatedAnnealingSampler()
+        engine_name = "neal"
+    else:
+        sampler = dimod.reference.samplers.SimulatedAnnealingSampler()
+        engine_name = "dimod_reference"
+
+    best_so_far = float("inf")
+    best_curve: List[float] = []
+    runtime_curve: List[float] = []
+    runtime_cumulative = 0.0
+
+    for idx, sweeps in enumerate(checkpoints):
+        start = time.perf_counter()
+        current_seed = int(seed) + int(idx)
+        try:
+            sampleset = sampler.sample(
+                bqm,
+                num_reads=int(num_reads),
+                num_sweeps=int(sweeps),
+                seed=current_seed,
+            )
+        except TypeError:
+            np_state = np.random.get_state()
+            try:
+                np.random.seed(current_seed % (2**32))
+                sampleset = sampler.sample(
+                    bqm,
+                    num_reads=int(num_reads),
+                    num_sweeps=int(sweeps),
+                )
+            finally:
+                np.random.set_state(np_state)
+        runtime_cumulative += float(time.perf_counter() - start)
+
+        best_so_far = min(best_so_far, float(sampleset.first.energy))
+        best_curve.append(float(best_so_far))
+        runtime_curve.append(float(runtime_cumulative))
+
+    return np.asarray(best_curve, dtype=float), np.asarray(runtime_curve, dtype=float), engine_name
 
 
 def parse_n_list(n_single: Optional[int], n_list: str) -> List[int]:
@@ -889,6 +962,7 @@ def run_benchmark_for_n(
     baseline_final_energies_by_family: Dict[str, List[float]] = {f: [] for f in families}
     baseline_runtimes_by_family: Dict[str, List[float]] = {f: [] for f in families}
     baseline_approx_ratios_by_family: Dict[str, List[float]] = {f: [] for f in families}
+    baseline_engine_name: Optional[str] = None
     steps_to_opt: Dict[str, List[int]] = {f: [] for f in families}
     all_rows: List[InstanceResult] = []
     walltime_seconds_by_family: Dict[str, float] = {}
@@ -971,12 +1045,14 @@ def run_benchmark_for_n(
                 approximation_ratio_minimization(obtained=float(best_so_far[-1]), optimal=opt_energy)
             )
             if baseline_enabled and baseline_method == "sa":
-                baseline_best, baseline_runtime = run_sa_baseline(
+                baseline_best, baseline_runtime, baseline_engine = run_sa_baseline(
                     bqm=bqm,
                     num_reads=int(args.baseline_sa_reads),
                     num_sweeps=int(args.baseline_sa_sweeps),
                     seed=int(run_seed) + 777777,
                 )
+                if baseline_engine_name is None:
+                    baseline_engine_name = str(baseline_engine)
                 baseline_final_energies_by_family[fam].append(float(baseline_best))
                 baseline_runtimes_by_family[fam].append(float(baseline_runtime))
                 baseline_approx_ratios_by_family[fam].append(
@@ -1166,6 +1242,7 @@ def run_benchmark_for_n(
         baseline_stats: Dict[str, Any] = {
             "enabled": True,
             "method": "sa",
+            "engine": baseline_engine_name if baseline_engine_name is not None else "unknown",
             "sa_config": {
                 "num_reads": int(args.baseline_sa_reads),
                 "num_sweeps": int(args.baseline_sa_sweeps),
