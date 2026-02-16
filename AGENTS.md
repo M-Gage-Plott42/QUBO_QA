@@ -3,6 +3,7 @@
 ## Purpose
 
 This repo benchmarks digital adiabatic/QA behavior for three QUBO families using Qiskit Aer:
+
 - Random symmetric QUBO
 - MaxCut QUBO
 - MIS QUBO
@@ -23,6 +24,7 @@ Primary script: `qa_adiabatic_steps_bench.py`
 - n-scan smoke: `make scan-smoke`
 
 Direct examples:
+
 - Single n: `python qa_adiabatic_steps_bench.py -n 6 --instances 10 --t-max 5 --shots 64 --aer-method statevector --opt-ref exact`
 - Scan mode: `python qa_adiabatic_steps_bench.py --n-list 4,5,6 --instances 50 --t-max 10 --shots 128 --opt-ref exact`
 
@@ -38,6 +40,7 @@ Direct examples:
 ## Output Contract
 
 Single-`n` run should produce:
+
 - `results.csv`
 - `summary.json`
 - `convergence_energy.png`
@@ -45,6 +48,7 @@ Single-`n` run should produce:
 - `steps_boxplot.png`
 
 `--n-list` scan should additionally produce:
+
 - `scan_summary.csv`
 - Per-`n` subdirectories (`n_<value>/...`)
 
@@ -57,6 +61,7 @@ Single-`n` run should produce:
 ## Validation Checklist
 
 Before committing:
+
 - `python -m py_compile qa_adiabatic_steps_bench.py`
 - `make smoke`
 - If stats logic changed: `make smoke-perm`
@@ -68,4 +73,3 @@ Before committing:
 - Do not run destructive git resets on user work.
 - Do not remove user data/output directories unless explicitly requested.
 - Treat WSL path differences as a first-class risk when reproducing commands.
-

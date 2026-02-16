@@ -5,11 +5,13 @@
 [![Markdown Lint](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml)
 
 Digital adiabatic/QA benchmark for three QUBO families:
+
 - Random symmetric QUBO (`x^T Q x`)
 - MaxCut QUBO on Erdos-Renyi graphs
 - MIS QUBO on Erdos-Renyi graphs
 
 The simulator uses Qiskit Aer with:
+
 - `statevector` for small `n`
 - `matrix_product_state` (MPS) for larger `n` when entanglement is moderate
 
@@ -176,6 +178,7 @@ Default output directory: `qa_out/`
 ### `--n-list` scan mode
 
 If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
+
 - `qa_scan/n_4/`, `qa_scan/n_5/`, `qa_scan/n_6/` (each with per-`n` results and summary)
 - `qa_scan/scan_summary.csv` (one row per `n`, medians, easy-case rates, p-values, Holm-adjusted p-values, Cliff's deltas, and scan-stop audit fields)
 
@@ -250,6 +253,7 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
 ## Patch Compliance Policy
 
 After any code patch to benchmark logic, CLI, caching, stats, or outputs, run and verify:
+
 - `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
 - `.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
 - `make smoke`
@@ -263,6 +267,7 @@ Only commit after these checks pass and audit findings are reviewed.
 ## Qiskit v2 Alignment Notes (2026-02-15)
 
 Validated against `M-Gage-Plott42/qiskit-v2-guide` (Qiskit 2.3.x patterns):
+
 - Hamiltonian-to-gate mapping is consistent:
   - driver term `-sum X` is implemented as `rx(-2 t)`,
   - problem terms are implemented as `rz(2 t h)` and `rzz(2 t J)`.

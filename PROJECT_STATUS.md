@@ -10,6 +10,7 @@
 ## Purpose
 
 Benchmark digital adiabatic/QA behavior for three QUBO families using Qiskit Aer on classical hardware:
+
 - Random symmetric QUBO (`x^T Q x`)
 - MaxCut QUBO (Erdos-Renyi)
 - MIS QUBO (Erdos-Renyi)
@@ -76,6 +77,7 @@ Primary script: `qa_adiabatic_steps_bench.py`
 ## Output Contract
 
 Single-`n` mode outputs:
+
 - `results.csv`
 - `summary.json`
 - `convergence_energy.png`
@@ -88,6 +90,7 @@ Single-`n` mode outputs:
 - `hist_approx_ratio.png` (only with `--plot-histograms`)
 
 Comparison mode (`compare_qa_sa_prr.py`) outputs:
+
 - `instance_bank.json`
 - `comparison_results.csv`
 - `comparison_curves.csv`
@@ -99,6 +102,7 @@ Comparison mode (`compare_qa_sa_prr.py`) outputs:
 - `hist_runtime_seconds.png` (unless `--no-plots`)
 
 `--n-list` mode additionally outputs:
+
 - `scan_summary.csv`
 - per-`n` subdirectories (`n_<value>/...`)
 
@@ -118,6 +122,7 @@ Comparison mode (`compare_qa_sa_prr.py`) outputs:
 ## Validation (Most Recent Pass)
 
 Executed successfully in this repo:
+
 - `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
 - `.venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v`
 - `make smoke`
@@ -183,18 +188,21 @@ Executed successfully in this repo:
 ## Workstation Handoff Checklist
 
 On a new workstation/clone, run:
+
 - `make install`
 - `make smoke`
 - `make smoke-perm`
 - `make scan-smoke`
 
 Then confirm policy behavior:
+
 - commit-intended outputs go under `artifacts/...`
 - exploratory outputs go under `diagnostics_local/...` (ignored)
 
 ## Patch Compliance Policy (Required)
 
 After any patch to benchmark code or CLI, run before commit:
+
 - `.venv/bin/python -m py_compile qa_adiabatic_steps_bench.py`
 - `make smoke`
 - `make smoke-perm`
@@ -217,32 +225,37 @@ Commit only after these checks pass and audit results are reviewed.
 ## Method Audit Action List (2026-02-15)
 
 Priority `P0`:
+
 - Enforce `--mis-lambda > 1` for current MIS objective form `-sum x_i + lambda * sum x_i x_j`.
   - Rationale: this preserves independent-set encoding in the standard QUBO construction.
   - Acceptance: CLI rejects invalid values with a clear error and README documents the bound.
   - Status: complete (implemented in commit `37eadaf`).
 
 Priority `P1`:
+
 - Clarify success metric labeling.
   - Current behavior computes success on `best_so_far` trajectories, so the plot is cumulative by time.
   - Acceptance: title/legend/docs explicitly say "reached by time t" and a separate instantaneous variant is added.
   - Status: complete (implemented on `main`, see commit history after `37eadaf`).
 
 Priority `P1`:
+
 - Add missing parameter guardrails.
   - Validate `--graph-p`, `--random-density` in `[0,1]`.
   - Acceptance: invalid values fail fast with actionable messages.
   - Status: complete (implemented on `main`, see commit history after `c6a5dac`).
 
 Priority `P1`:
+
 - Add focused tests for the above.
   - Acceptance: tests fail before fix and pass after fix for each targeted behavior.
   - Status: complete (implemented on `main`, see commit history after `b85f94c`).
 
 Reference basis used for the action list:
-- A. Lucas (2014), "Ising formulations of many NP problems" (MIS penalty condition, Eq. 37 / `B < A`): https://arxiv.org/pdf/1302.5843.pdf
-- Qiskit bit-ordering guide (measurement-string conventions): https://qiskit.qotlabs.org/docs/guides/bit-ordering
-- D-Wave `dimod` BQM docs (Ising/QUBO relationship and conventions): https://docs.dwavequantum.com/en/latest/ocean/api_ref_dimod/bqm.html
+
+- A. Lucas (2014), "Ising formulations of many NP problems" (MIS penalty condition, Eq. 37 / `B < A`): <https://arxiv.org/pdf/1302.5843.pdf>
+- Qiskit bit-ordering guide (measurement-string conventions): <https://qiskit.qotlabs.org/docs/guides/bit-ordering>
+- D-Wave `dimod` BQM docs (Ising/QUBO relationship and conventions): <https://docs.dwavequantum.com/en/latest/ocean/api_ref_dimod/bqm.html>
 
 ## Quick Commands
 
