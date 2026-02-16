@@ -108,6 +108,203 @@ def build_summary_aggregates(result_rows: List[Dict[str, Any]], families: List[s
     return summary
 
 
+def _rows_to_curve_index(curve_rows: List[Dict[str, Any]]) -> Dict[tuple, Dict[str, np.ndarray]]:
+    grouped: Dict[tuple, List[Dict[str, Any]]] = {}
+    for row in curve_rows:
+        key = (str(row["family"]), int(row["instance_id"]), str(row["algorithm"]))
+        grouped.setdefault(key, []).append(row)
+
+    out: Dict[tuple, Dict[str, np.ndarray]] = {}
+    for key, rows in grouped.items():
+        rows_sorted = sorted(rows, key=lambda r: float(r["budget_fraction"]))
+        budget = np.asarray([float(r["budget_fraction"]) for r in rows_sorted], dtype=float)
+        energy = np.asarray([float(r["best_energy_so_far"]) for r in rows_sorted], dtype=float)
+        out[key] = {"budget": budget, "energy": energy}
+    return out
+
+
+def _write_plots(
+    *,
+    outdir: str,
+    families: List[str],
+    result_rows: List[Dict[str, Any]],
+    curve_rows: List[Dict[str, Any]],
+    plot_grid_points: int,
+) -> List[str]:
+    mpl_config_dir = os.path.join(outdir, ".mplconfig")
+    os.makedirs(mpl_config_dir, exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = mpl_config_dir
+
+    import matplotlib.pyplot as plt
+
+    saved: List[str] = []
+    algorithms = ["qa", "sa", "prr"]
+    algo_labels = {"qa": "QA", "sa": "SA", "prr": "PRR"}
+    algo_colors = {"qa": "#1f77b4", "sa": "#2ca02c", "prr": "#d62728"}
+    tol = 1e-9
+
+    opt_by_instance: Dict[tuple, Optional[float]] = {}
+    for row in result_rows:
+        key = (str(row["family"]), int(row["instance_id"]))
+        if key not in opt_by_instance:
+            opt_by_instance[key] = row["opt_energy"]
+
+    curve_index = _rows_to_curve_index(curve_rows)
+    grid = np.linspace(0.0, 1.0, int(max(8, plot_grid_points)))
+
+    # Convergence ratio R by family.
+    fig, axes = plt.subplots(1, len(families), figsize=(5.2 * len(families), 4.2), squeeze=False)
+    axes_list = axes[0]
+    ratio_plot_has_data = False
+    for ax, family in zip(axes_list, families):
+        ax.set_title(f"{family} (R)")
+        for algo in algorithms:
+            curves: List[np.ndarray] = []
+            for inst_id in sorted({int(r["instance_id"]) for r in result_rows if r["family"] == family}):
+                curve_key = (family, inst_id, algo)
+                inst_key = (family, inst_id)
+                if curve_key not in curve_index:
+                    continue
+                opt = opt_by_instance.get(inst_key)
+                if opt is None:
+                    continue
+                budget = curve_index[curve_key]["budget"]
+                energy = curve_index[curve_key]["energy"]
+                interp = np.interp(grid, budget, energy)
+                ratio_curve = np.asarray(
+                    [approximation_ratio_minimization(obtained=float(e), optimal=float(opt)) for e in interp],
+                    dtype=float,
+                )
+                curves.append(ratio_curve)
+            if curves:
+                ratio_plot_has_data = True
+                stacked = np.vstack(curves)
+                ax.plot(grid, np.median(stacked, axis=0), label=algo_labels[algo], color=algo_colors[algo])
+        ax.set_xlabel("budget fraction")
+        ax.set_ylabel("median approximation ratio R")
+        ax.set_ylim(0.0, 1.01)
+        ax.grid(alpha=0.25)
+        ax.legend()
+    fig.tight_layout()
+    ratio_path = os.path.join(outdir, "convergence_ratio_compare.png")
+    fig.savefig(ratio_path, dpi=200)
+    plt.close(fig)
+    if ratio_plot_has_data:
+        saved.append(ratio_path)
+
+    # Success probability by family.
+    fig, axes = plt.subplots(1, len(families), figsize=(5.2 * len(families), 4.2), squeeze=False)
+    axes_list = axes[0]
+    success_plot_has_data = False
+    for ax, family in zip(axes_list, families):
+        ax.set_title(f"{family} success")
+        for algo in algorithms:
+            curves: List[np.ndarray] = []
+            for inst_id in sorted({int(r["instance_id"]) for r in result_rows if r["family"] == family}):
+                curve_key = (family, inst_id, algo)
+                inst_key = (family, inst_id)
+                if curve_key not in curve_index:
+                    continue
+                opt = opt_by_instance.get(inst_key)
+                if opt is None:
+                    continue
+                budget = curve_index[curve_key]["budget"]
+                energy = curve_index[curve_key]["energy"]
+                interp = np.interp(grid, budget, energy)
+                curves.append((interp <= float(opt) + tol).astype(float))
+            if curves:
+                success_plot_has_data = True
+                stacked = np.vstack(curves)
+                ax.plot(grid, np.mean(stacked, axis=0), label=algo_labels[algo], color=algo_colors[algo])
+        ax.set_xlabel("budget fraction")
+        ax.set_ylabel("success probability")
+        ax.set_ylim(0.0, 1.01)
+        ax.grid(alpha=0.25)
+        ax.legend()
+    fig.tight_layout()
+    success_path = os.path.join(outdir, "success_prob_compare.png")
+    fig.savefig(success_path, dpi=200)
+    plt.close(fig)
+    if success_plot_has_data:
+        saved.append(success_path)
+
+    # Histogram: final approximation ratio by family.
+    fig, axes = plt.subplots(1, len(families), figsize=(5.2 * len(families), 4.2), squeeze=False)
+    axes_list = axes[0]
+    ratio_hist_has_data = False
+    for ax, family in zip(axes_list, families):
+        ax.set_title(f"{family} final R")
+        for algo in algorithms:
+            vals = [
+                float(r["approx_ratio"])
+                for r in result_rows
+                if r["family"] == family and r["algorithm"] == algo and r["approx_ratio"] is not None
+            ]
+            if vals:
+                ratio_hist_has_data = True
+                ax.hist(vals, bins=10, alpha=0.5, label=algo_labels[algo], color=algo_colors[algo])
+        ax.set_xlabel("approximation ratio R")
+        ax.set_ylabel("count")
+        ax.grid(alpha=0.2)
+        ax.legend()
+    fig.tight_layout()
+    ratio_hist_path = os.path.join(outdir, "hist_final_ratio.png")
+    fig.savefig(ratio_hist_path, dpi=200)
+    plt.close(fig)
+    if ratio_hist_has_data:
+        saved.append(ratio_hist_path)
+
+    # Histogram: final gap to opt by family.
+    fig, axes = plt.subplots(1, len(families), figsize=(5.2 * len(families), 4.2), squeeze=False)
+    axes_list = axes[0]
+    gap_hist_has_data = False
+    for ax, family in zip(axes_list, families):
+        ax.set_title(f"{family} final gap")
+        for algo in algorithms:
+            vals = [
+                float(r["gap_to_opt"])
+                for r in result_rows
+                if r["family"] == family and r["algorithm"] == algo and r["gap_to_opt"] is not None
+            ]
+            if vals:
+                gap_hist_has_data = True
+                ax.hist(vals, bins=10, alpha=0.5, label=algo_labels[algo], color=algo_colors[algo])
+        ax.set_xlabel("gap to optimum")
+        ax.set_ylabel("count")
+        ax.grid(alpha=0.2)
+        ax.legend()
+    fig.tight_layout()
+    gap_hist_path = os.path.join(outdir, "hist_final_gap.png")
+    fig.savefig(gap_hist_path, dpi=200)
+    plt.close(fig)
+    if gap_hist_has_data:
+        saved.append(gap_hist_path)
+
+    # Histogram: runtime by family.
+    fig, axes = plt.subplots(1, len(families), figsize=(5.2 * len(families), 4.2), squeeze=False)
+    axes_list = axes[0]
+    runtime_hist_has_data = False
+    for ax, family in zip(axes_list, families):
+        ax.set_title(f"{family} runtime")
+        for algo in algorithms:
+            vals = [float(r["runtime_seconds"]) for r in result_rows if r["family"] == family and r["algorithm"] == algo]
+            if vals:
+                runtime_hist_has_data = True
+                ax.hist(vals, bins=10, alpha=0.5, label=algo_labels[algo], color=algo_colors[algo])
+        ax.set_xlabel("runtime (s)")
+        ax.set_ylabel("count")
+        ax.grid(alpha=0.2)
+        ax.legend()
+    fig.tight_layout()
+    runtime_hist_path = os.path.join(outdir, "hist_runtime_seconds.png")
+    fig.savefig(runtime_hist_path, dpi=200)
+    plt.close(fig)
+    if runtime_hist_has_data:
+        saved.append(runtime_hist_path)
+
+    return saved
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("-n", "--n", type=int, required=True)
@@ -170,6 +367,8 @@ def main() -> None:
     # Opt reference.
     ap.add_argument("--opt-ref", type=str, default="exact", choices=["exact", "none"])
     ap.add_argument("--exact-max-n", type=int, default=16)
+    ap.add_argument("--plot-grid-points", type=int, default=101)
+    ap.add_argument("--no-plots", action="store_true")
 
     args = ap.parse_args()
 
@@ -505,6 +704,22 @@ def main() -> None:
                 "prr": "best_expectation_energy",
             },
         },
+    }
+
+    plot_paths: List[str] = []
+    if not bool(args.no_plots):
+        plot_paths = _write_plots(
+            outdir=args.outdir,
+            families=families,
+            result_rows=result_rows,
+            curve_rows=curve_rows,
+            plot_grid_points=int(args.plot_grid_points),
+        )
+        for path in plot_paths:
+            print(f"Wrote: {path}")
+    summary["plots"] = {
+        "enabled": not bool(args.no_plots),
+        "generated": [os.path.basename(path) for path in plot_paths],
     }
 
     summary_json_path = os.path.join(args.outdir, "comparison_summary.json")
