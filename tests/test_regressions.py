@@ -60,7 +60,7 @@ class TestCliGuards(unittest.TestCase):
             check=False,
         )
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("--mis-lambda must be > 1.0", proc.stderr)
+        self.assertIn("--mis-lambda must be greater than max(1.0, --mis-node-weight-high)", proc.stderr)
 
 
 class TestSuccessSemantics(unittest.TestCase):
