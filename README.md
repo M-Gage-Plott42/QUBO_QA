@@ -42,6 +42,14 @@ make install
 make smoke
 ```
 
+## Repository Guardrails
+
+- GitHub Actions lint workflows: `.github/workflows/lint-python.yml` and `.github/workflows/lint-markdown.yml`
+- Code scanning: GitHub CodeQL default setup (repository setting)
+- Dependabot updates for GitHub Actions: `.github/dependabot.yml`
+- Ownership policy: `.github/CODEOWNERS`
+- Security reporting policy: `SECURITY.md`
+
 ## New Workstation Checklist
 
 ```bash

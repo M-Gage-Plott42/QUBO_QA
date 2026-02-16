@@ -73,6 +73,13 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - GitHub Actions lint workflows:
     - `Python Lint` (`.github/workflows/lint-python.yml`, Ruff)
     - `Markdown Lint` (`.github/workflows/lint-markdown.yml`, markdownlint-cli2)
+  - Code scanning:
+    - GitHub CodeQL default setup enabled (repository setting)
+  - Dependabot configuration:
+    - `.github/dependabot.yml` (weekly GitHub Actions updates)
+  - Security and ownership docs:
+    - `SECURITY.md`
+    - `.github/CODEOWNERS`
 
 ## Output Contract
 
