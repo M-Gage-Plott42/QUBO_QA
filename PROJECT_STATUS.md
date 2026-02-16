@@ -76,7 +76,7 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - Code scanning:
     - GitHub CodeQL default setup enabled (repository setting)
   - Dependabot configuration:
-    - `.github/dependabot.yml` (weekly GitHub Actions updates)
+    - `.github/dependabot.yml` (weekly GitHub Actions and `pip` updates)
   - Security and ownership docs:
     - `SECURITY.md`
     - `.github/CODEOWNERS`
