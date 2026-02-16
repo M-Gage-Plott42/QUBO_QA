@@ -3,7 +3,7 @@ VENV ?= .venv
 PIP := $(VENV)/bin/python -m pip
 RUN := $(VENV)/bin/python
 
-.PHONY: venv install smoke smoke-perm scan-smoke baseline mps clean
+.PHONY: venv install smoke smoke-perm scan-smoke compare-smoke baseline mps clean
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -23,6 +23,13 @@ smoke-perm:
 scan-smoke:
 	$(RUN) qa_adiabatic_steps_bench.py --n-list 4,5 --instances 3 --t-max 2 --shots 32 \
 		--aer-method statevector --opt-ref exact --stats-method mw --no-plots --outdir qa_scan_smoke
+
+compare-smoke:
+	$(RUN) compare_qa_sa_prr.py -n 4 --instances 1 --t-max 1 --delta-t 0.5 --shots 16 \
+		--aer-method statevector \
+		--sa-reads 16 --sa-sweep-checkpoints 8,16 \
+		--prr-total-time 1 --prr-segments 4 --prr-maxiter-bfgs 4 --prr-maxiter-nm 8 \
+		--no-plots --outdir diagnostics_local/compare_smoke
 
 baseline:
 	$(RUN) qa_adiabatic_steps_bench.py -n 6 --instances 100 --t-max 10 --shots 128 --aer-method statevector --opt-ref exact

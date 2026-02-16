@@ -2,9 +2,9 @@
 
 ## Last Updated
 
-- Date: 2026-02-15
+- Date: 2026-02-16
 - Branch: `main`
-- Head commit: `c9afda4`
+- Head commit: `main` (see `git log --oneline -n 1`)
 - Repo: `git@github.com:M-Gage-Plott42/QUBO_QA.git`
 
 ## Purpose
@@ -57,8 +57,16 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - optional `hardness_proxy` via exact-solver degeneracy/gap proxy (`--hardness-proxy exact`)
 - Optional classical baseline track:
   - `--classical-baseline sa` for side-by-side QA vs SA quality/runtime comparison in `summary.json`
+  - SA engine prefers `dwave-neal` when available (falls back to `dimod.reference` if unavailable)
 - Separate PRR-style analog prototype script:
   - `prr_local_detuning_opt.py` (piecewise local-detuning optimization with BFGS/NM/BFGS)
+  - now includes optimization trace output (`optimization_trace.csv`) and protocol-mode tagging
+- Cross-algorithm comparison script:
+  - `compare_qa_sa_prr.py` for QA/SA/PRR side-by-side runs on shared instance banks
+  - writes `instance_bank.json`, `comparison_results.csv`, `comparison_curves.csv`, `comparison_summary.json`
+  - renders comparison plots/histograms (`convergence_ratio_compare.png`, `success_prob_compare.png`, `hist_*`)
+- Optional histogram plotting in QA benchmark:
+  - `--plot-histograms` adds `hist_final_energy.png`, `hist_final_gap_to_opt.png`, `hist_approx_ratio.png`
 
 ## Output Contract
 
@@ -70,6 +78,20 @@ Single-`n` mode outputs:
 - `success_prob_instantaneous.png`
 - `steps_boxplot.png`
 - `expectation_energy.png` (only when `--estimator-diagnostics` is enabled)
+- `hist_final_energy.png` (only with `--plot-histograms`)
+- `hist_final_gap_to_opt.png` (only with `--plot-histograms`)
+- `hist_approx_ratio.png` (only with `--plot-histograms`)
+
+Comparison mode (`compare_qa_sa_prr.py`) outputs:
+- `instance_bank.json`
+- `comparison_results.csv`
+- `comparison_curves.csv`
+- `comparison_summary.json`
+- `convergence_ratio_compare.png` (unless `--no-plots`)
+- `success_prob_compare.png` (unless `--no-plots`)
+- `hist_final_ratio.png` (unless `--no-plots`)
+- `hist_final_gap.png` (unless `--no-plots`)
+- `hist_runtime_seconds.png` (unless `--no-plots`)
 
 `--n-list` mode additionally outputs:
 - `scan_summary.csv`
@@ -96,6 +118,7 @@ Executed successfully in this repo:
 - `make smoke`
 - `make smoke-perm`
 - `make scan-smoke`
+- `make compare-smoke`
 - Estimator diagnostics smoke:
   - `.venv/bin/python qa_adiabatic_steps_bench.py -n 4 --instances 2 --t-max 1 --shots 16 --aer-method statevector --opt-ref exact --estimator-diagnostics --outdir /tmp/qa_estimator_diag`
 - Cache benchmark matrix restart (for cache on/off characterization):

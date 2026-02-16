@@ -27,6 +27,7 @@ The simulator uses Qiskit Aer with:
   - `--stats-method perm` (one-sided permutation test on median difference)
 - Multi-`n` scan mode via `--n-list` with aggregated `scan_summary.csv`
 - Separate PRR-style analog prototype via `prr_local_detuning_opt.py`
+- Cross-algorithm comparator via `compare_qa_sa_prr.py` (QA/SA/PRR on shared instances)
 
 ## Quickstart
 
@@ -127,6 +128,16 @@ PRR-style analog local-detuning prototype (BFGS/NM/BFGS):
   --outdir diagnostics_local/2026-02-15/prr_maxcut_n8
 ```
 
+QA/SA/PRR comparison run (all three families, shared instance bank):
+
+```bash
+.venv/bin/python compare_qa_sa_prr.py -n 8 --instances 5 --t-max 6 --delta-t 0.25 --shots 64 \
+  --aer-method statevector \
+  --sa-reads 128 --sa-sweep-checkpoints 64,256,1024 \
+  --prr-total-time 3.5 --prr-segments 8 \
+  --outdir diagnostics_local/2026-02-16/compare_n8_i5
+```
+
 ## Outputs
 
 ### Single-`n` mode
@@ -140,6 +151,23 @@ Default output directory: `qa_out/`
 - `success_prob_instantaneous.png` (instantaneous success probability at time `t`)
 - `expectation_energy.png` (optional, only with `--estimator-diagnostics`)
 - `steps_boxplot.png` (steps-to-opt distribution)
+- optional histogram outputs with `--plot-histograms`:
+  - `hist_final_energy.png`
+  - `hist_final_gap_to_opt.png`
+  - `hist_approx_ratio.png`
+
+### QA/SA/PRR comparison mode (`compare_qa_sa_prr.py`)
+
+- `instance_bank.json` (shared deterministic instance manifest + digests)
+- `comparison_results.csv` (per-instance final metrics for QA/SA/PRR)
+- `comparison_curves.csv` (per-instance convergence traces)
+- `comparison_summary.json` (aggregate metrics, including `R` and `1-R`)
+- plots (unless `--no-plots`):
+  - `convergence_ratio_compare.png`
+  - `success_prob_compare.png`
+  - `hist_final_ratio.png`
+  - `hist_final_gap.png`
+  - `hist_runtime_seconds.png`
 
 ### `--n-list` scan mode
 
@@ -198,6 +226,10 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
   - optional `hardness_proxy` when `--hardness-proxy exact` is enabled
 - `summary.json` includes optional classical baseline comparison metadata under `classical_baseline`
   when `--classical-baseline sa` is enabled.
+- SA execution prefers `dwave-neal` when installed; baseline metadata records `classical_baseline.engine`.
+- `compare_qa_sa_prr.py` exposes paper-style quality metrics directly:
+  - approximation ratio `R`,
+  - approximation-ratio error `1 - R`.
 - Success curves are reported in two variants:
   - cumulative-by-time (`success_prob.png`, computed from best-so-far trajectories),
   - instantaneous-at-time (`success_prob_instantaneous.png`, computed from per-step sampled energies).
@@ -219,6 +251,7 @@ After any code patch to benchmark logic, CLI, caching, stats, or outputs, run an
 - `make smoke`
 - `make smoke-perm`
 - `make scan-smoke`
+- `make compare-smoke`
 - Targeted subsystem audit for the changed area (for example cache on/off artifact audit, estimator diagnostics smoke, or stats sanity check)
 
 Only commit after these checks pass and audit findings are reviewed.
@@ -243,3 +276,4 @@ Validated against `M-Gage-Plott42/qiskit-v2-guide` (Qiskit 2.3.x patterns):
 - `make smoke` for quick baseline check
 - `make smoke-perm` for permutation-test quick check
 - `make scan-smoke` for quick `--n-list` check
+- `make compare-smoke` for quick QA/SA/PRR comparison check

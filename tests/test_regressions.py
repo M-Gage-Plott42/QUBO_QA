@@ -1,3 +1,4 @@
+import csv
 import json
 import subprocess
 import sys
@@ -104,6 +105,64 @@ class TestSuccessSemantics(unittest.TestCase):
                 self.assertIn(fam, cumulative)
                 self.assertIn(fam, instantaneous)
                 self.assertGreaterEqual(float(cumulative[fam]), float(instantaneous[fam]))
+
+
+class TestCompareCliOutputs(unittest.TestCase):
+    def test_compare_smoke_generates_three_algorithm_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            outdir = Path(tmpdir) / "compare_smoke"
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "compare_qa_sa_prr.py",
+                    "-n",
+                    "4",
+                    "--instances",
+                    "1",
+                    "--t-max",
+                    "1",
+                    "--delta-t",
+                    "0.5",
+                    "--shots",
+                    "8",
+                    "--aer-method",
+                    "statevector",
+                    "--sa-reads",
+                    "8",
+                    "--sa-sweep-checkpoints",
+                    "4,8",
+                    "--prr-total-time",
+                    "1",
+                    "--prr-segments",
+                    "4",
+                    "--prr-maxiter-bfgs",
+                    "2",
+                    "--prr-maxiter-nm",
+                    "4",
+                    "--no-plots",
+                    "--outdir",
+                    str(outdir),
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, msg=proc.stdout + "\n" + proc.stderr)
+
+            self.assertTrue((outdir / "instance_bank.json").exists())
+            self.assertTrue((outdir / "comparison_results.csv").exists())
+            self.assertTrue((outdir / "comparison_curves.csv").exists())
+            self.assertTrue((outdir / "comparison_summary.json").exists())
+
+            with (outdir / "comparison_results.csv").open(newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 9)  # 3 families x 3 algorithms x 1 instance
+            self.assertEqual(sorted(set(r["algorithm"] for r in rows)), ["prr", "qa", "sa"])
+
+            summary = json.loads((outdir / "comparison_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["schema_version"], "qa_sa_prr_compare_v1")
+            self.assertFalse(bool(summary["plots"]["enabled"]))
 
 
 if __name__ == "__main__":
