@@ -136,7 +136,6 @@ def optimize_local_detuning_schedule(
     # - g for all but last segment (last fixed to 1.0)
     n_omega = segments - 2
     n_g = segments - 1
-    n_vars = n_omega + n_g
 
     def unpack(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         omega = np.zeros(segments, dtype=float)

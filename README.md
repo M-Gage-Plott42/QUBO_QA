@@ -1,5 +1,9 @@
 # QUBO QA Benchmark (Qiskit Aer, CPU)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Lint](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-python.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-python.yml)
+[![Markdown Lint](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml)
+
 Digital adiabatic/QA benchmark for three QUBO families:
 - Random symmetric QUBO (`x^T Q x`)
 - MaxCut QUBO on Erdos-Renyi graphs

@@ -67,6 +67,11 @@ Primary script: `qa_adiabatic_steps_bench.py`
   - renders comparison plots/histograms (`convergence_ratio_compare.png`, `success_prob_compare.png`, `hist_*`)
 - Optional histogram plotting in QA benchmark:
   - `--plot-histograms` adds `hist_final_energy.png`, `hist_final_gap_to_opt.png`, `hist_approx_ratio.png`
+- Repository governance basics:
+  - MIT `LICENSE` present at repo root
+  - GitHub Actions lint workflows:
+    - `Python Lint` (`.github/workflows/lint-python.yml`, Ruff)
+    - `Markdown Lint` (`.github/workflows/lint-markdown.yml`, markdownlint-cli2)
 
 ## Output Contract
 
