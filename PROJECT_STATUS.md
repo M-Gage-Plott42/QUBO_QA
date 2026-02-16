@@ -77,6 +77,7 @@ Primary script: `qa_adiabatic_steps_bench.py`
     - GitHub CodeQL default setup enabled (repository setting)
   - Dependabot configuration:
     - `.github/dependabot.yml` (weekly GitHub Actions and `pip` updates)
+    - `.github/workflows/dependabot-auto-merge.yml` (auto-enables squash auto-merge for Dependabot `github_actions` PRs)
   - Security and ownership docs:
     - `SECURITY.md`
     - `.github/CODEOWNERS`

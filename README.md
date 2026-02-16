@@ -47,6 +47,7 @@ make smoke
 - GitHub Actions lint workflows: `.github/workflows/lint-python.yml` and `.github/workflows/lint-markdown.yml`
 - Code scanning: GitHub CodeQL default setup (repository setting)
 - Dependabot updates for GitHub Actions and `pip`: `.github/dependabot.yml`
+- Dependabot PR auto-merge helper for Actions updates: `.github/workflows/dependabot-auto-merge.yml`
 - Ownership policy: `.github/CODEOWNERS`
 - Security reporting policy: `SECURITY.md`
 
