@@ -15,6 +15,26 @@ The simulator uses Qiskit Aer with:
 - `statevector` for small `n`
 - `matrix_product_state` (MPS) for larger `n` when entanglement is moderate
 
+## Interpretation for Reviewers
+
+Use `statevector` runs as the reference curve for small-to-mid `n`, where exact
+state evolution is still tractable and gives a clean baseline for algorithmic
+behavior. MPS becomes viable as `n` grows when entanglement remains controlled,
+especially on sparser instances and locality-improved graph orderings. The key
+viability knobs are bond-dimension budget, truncation threshold, and topology
+choices that reduce long-range couplings. For early-FT thinking, this artifact
+is most useful as a workload characterization layer (instance hardness, schedule
+sensitivity, convergence/runtime trends), not as a hardware fault-tolerant cost
+model.
+
+## Backend Selection Guide
+
+| Regime | Recommended backend | Primary knobs | Failure signal |
+| --- | --- | --- | --- |
+| Small `n`, exact-reference studies | `statevector` | `K`, `delta_t`, `shots` | Exponential walltime/memory growth |
+| Mid/Larger `n`, moderate entanglement | `matrix_product_state` | `--mps-max-bond-dimension`, `--mps-truncation-threshold`, graph relabeling/locality | Bond growth, truncation drift, runtime spikes |
+| Dense/high-entanglement stress cases | Start with MPS, validate spot checks in statevector where feasible | Reduce density, increase bond dimension conservatively, tighten truncation checks | MPS loses advantage or quality degrades versus reference |
+
 ## Current Features
 
 - Trotterized adiabatic evolution with `delta_t` and sweep over step count `K`
@@ -258,6 +278,10 @@ If `--outdir qa_scan` and `--n-list 4,5,6`, outputs are:
     - `--scan-stop-p-holm-threshold 0.9 --scan-stop-easy-case-threshold 0.9 --scan-stop-easy-case-op ge --scan-stop-min-n-evals 2`
   - Conservative early-stop:
     - `--scan-stop-p-holm-threshold 0.95 --scan-stop-easy-case-threshold 0.7 --scan-stop-easy-case-op ge --scan-stop-min-n-evals 3`
+- Resource-estimation handoff: LANL-style downstream analysis can directly reuse
+  `scan_summary.csv`, `run_timing`, and success/convergence curves as workload
+  inputs; hardware/error-model FT resource estimation itself is intentionally
+  out of scope for this repository.
 
 ## Patch Compliance Policy
 
