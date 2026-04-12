@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Lint](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-python.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-python.yml)
 [![Markdown Lint](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/lint-markdown.yml)
+[![Benchmark Validation](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/validation.yml/badge.svg)](https://github.com/M-Gage-Plott42/QUBO_QA/actions/workflows/validation.yml)
 
 Digital adiabatic/QA benchmark for three QUBO families:
 
@@ -65,6 +66,7 @@ make smoke
 ## Repository Guardrails
 
 - GitHub Actions lint workflows: `.github/workflows/lint-python.yml` and `.github/workflows/lint-markdown.yml`
+- Benchmark validation workflow: `.github/workflows/validation.yml` runs compile, unit, and smoke checks on pull requests, `main`, and merge-queue checks
 - Code scanning: GitHub CodeQL default setup (repository setting)
 - Dependabot updates for GitHub Actions and `pip`: `.github/dependabot.yml`
 - Dependabot PR auto-merge helper for Actions updates: `.github/workflows/dependabot-auto-merge.yml`

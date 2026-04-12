@@ -137,6 +137,7 @@ Executed successfully in this repo:
 - `make smoke-perm`
 - `make scan-smoke`
 - `make compare-smoke`
+- GitHub Actions benchmark validation workflow now mirrors those compile, unit, and smoke checks on pull requests, `main`, and merge-queue checks
 - Estimator diagnostics smoke:
   - `.venv/bin/python qa_adiabatic_steps_bench.py -n 4 --instances 2 --t-max 1 --shots 16 --aer-method statevector --opt-ref exact --estimator-diagnostics --outdir /tmp/qa_estimator_diag`
 - Cache benchmark matrix restart (for cache on/off characterization):

@@ -1,0 +1,46 @@
+name: Benchmark Validation
+
+on:
+  pull_request:
+  merge_group:
+    types:
+      - checks_requested
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Compile core scripts
+        run: .venv/bin/python -m py_compile qa_adiabatic_steps_bench.py compare_qa_sa_prr.py prr_local_detuning_opt.py comparison_common.py
+
+      - name: Run unit tests
+        run: .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Run smoke checks
+        run: |
+          make smoke
+          make smoke-perm
+          make scan-smoke
+          make compare-smoke
