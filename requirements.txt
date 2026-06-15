@@ -4,5 +4,5 @@ numpy>=1.26
 networkx>=3.6.1
 dimod>=0.12.22
 dwave-neal>=0.6
-scipy>=1.11
+scipy>=1.17.1
 matplotlib>=3.11.0
