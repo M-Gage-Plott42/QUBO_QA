@@ -69,7 +69,8 @@ make smoke
 - Benchmark validation workflow: `.github/workflows/validation.yml` runs compile, unit, and smoke checks on pull requests, `main`, and merge-queue checks
 - Code scanning: GitHub CodeQL default setup (repository setting)
 - Dependabot updates for GitHub Actions and `pip`: `.github/dependabot.yml`
-- Dependabot PR auto-merge helper for Actions updates: `.github/workflows/dependabot-auto-merge.yml`
+- Dependabot pull requests remain review-gated; no workflow queues them for
+  automatic merge
 - Ownership policy: `.github/CODEOWNERS`
 - Security reporting policy: `SECURITY.md`
 
