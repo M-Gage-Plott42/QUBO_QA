@@ -65,7 +65,7 @@ make smoke
 
 ## Repository Guardrails
 
-- GitHub Actions lint workflows: `.github/workflows/lint-python.yml` and `.github/workflows/lint-markdown.yml`
+- GitHub Actions lint workflows: `.github/workflows/lint-python.yml` and `.github/workflows/lint-markdown.yml`; Python lint is fixed to Ruff `0.15.1` and upgrades are reviewed with their source changes
 - Benchmark validation workflow: `.github/workflows/validation.yml` runs compile, unit, and smoke checks on pull requests, `main`, and merge-queue checks
 - Code scanning: GitHub CodeQL default setup (repository setting)
 - Dependabot updates for GitHub Actions and `pip`: `.github/dependabot.yml`
