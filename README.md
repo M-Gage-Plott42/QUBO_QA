@@ -302,7 +302,10 @@ Only commit after these checks pass and audit findings are reviewed.
 
 ## Qiskit v2 Alignment Notes (2026-02-15)
 
-Validated against `M-Gage-Plott42/qiskit-v2-guide` (Qiskit 2.3.x patterns):
+This alignment audit was completed on 2026-02-15 against
+`M-Gage-Plott42/qiskit-v2-guide` as it then documented Qiskit 2.3.x API
+patterns. The full patch-compliance lane was re-run successfully on 2026-07-29
+with `qiskit==2.5.1`.
 
 - Hamiltonian-to-gate mapping is consistent:
   - driver term `-sum X` is implemented as `rx(-2 t)`,

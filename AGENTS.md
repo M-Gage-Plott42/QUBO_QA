@@ -45,6 +45,7 @@ Single-`n` run should produce:
 - `summary.json`
 - `convergence_energy.png`
 - `success_prob.png`
+- `success_prob_instantaneous.png`
 - `steps_boxplot.png`
 
 `--n-list` scan should additionally produce:
