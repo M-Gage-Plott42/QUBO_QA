@@ -1,7 +1,7 @@
 qiskit>=2.5.2
 qiskit-aer>=0.17.2
 numpy>=2.5.3
-networkx>=3.6.1
+networkx>=3.7
 dimod>=0.12.22
 dwave-neal>=0.6
 scipy>=1.18.1
