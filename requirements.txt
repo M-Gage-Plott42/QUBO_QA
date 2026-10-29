@@ -1,5 +1,5 @@
 qiskit>=2.6.1
-qiskit-aer>=0.17.2
+qiskit-aer>=0.18.0
 numpy>=2.5.4
 networkx>=3.7
 dimod>=0.12.23
